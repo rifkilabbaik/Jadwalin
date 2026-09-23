@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block judul %}Tambah postingan{% endblock %}
+{% block isi %}
+<div class="max-w-2xl">
+  <h1 class="text-xl font-bold">Tambah postingan</h1>
+  <p class="mt-1 text-sm text-stone-500">Tempel link dan caption dari Instagram, dan/atau unggah screenshot poster. Minimal satu harus diisi.</p>
+
+  {% if duplikat %}
+  <div class="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+    Postingan ini sudah ada: <a class="font-semibold underline" href="/prospek/{{ duplikat.id }}">#{{ duplikat.id }} {{ duplikat.judul }}</a> ({{ STATUS[duplikat.status] }}).
+  </div>
+  {% endif %}
+
+  <form method="post" action="/tambah" enctype="multipart/form-data" class="mt-4 space-y-4 bg-white rounded-xl border border-stone-200 p-5">
+    <label class="block">
+      <span class="text-sm font-medium">Link postingan</span>
+      <input type="text" inputmode="url" name="permalink" value="{{ isian.permalink or '' }}" placeholder="https://www.instagram.com/p/..."
+             class="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 focus:border-orange-500 focus:outline-none">
+    </label>
+    <label class="block">
+      <span class="text-sm font-medium">Akun pengunggah <span class="font-normal text-stone-400">(opsional)</span></span>
+      <input type="text" name="akun_ig" value="{{ isian.akun_ig or '' }}" placeholder="@namaakun"
+             class="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 focus:border-orange-500 focus:outline-none">
+    </label>
+    <label class="block">
+      <span class="text-sm font-medium">Caption</span>
+      <textarea name="caption" rows="7" placeholder="Tempel caption postingan di sini"
+                class="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 focus:border-orange-500 focus:outline-none">{{ isian.caption or '' }}</textarea>
+    </label>
+    <label class="block">
+      <span class="text-sm font-medium">Gambar poster</span>
+      <input type="file" name="gambar" accept="image/png,image/jpeg,image/webp,image/gif"
+             class="mt-1 block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-orange-100 file:px-3 file:py-2 file:text-orange-800">
+      <span class="mt-1 block text-xs text-stone-400">JPG, PNG, WEBP, atau GIF, maks. 15 MB.</span>
+    </label>
+    <button class="w-full sm:w-auto rounded-lg bg-orange-600 px-5 py-2.5 font-medium text-white hover:bg-orange-700">Simpan</button>
+  </form>
+
+  <div class="mt-4 rounded-xl border border-stone-200 bg-white p-5 text-sm text-stone-600">
+    <h2 class="font-semibold text-stone-800">Banyak screenshot sekaligus?</h2>
+    <p class="mt-1">Taruh gambar poster di folder <code class="rounded bg-stone-100 px-1 break-all">{{ inbox }}</code>. Jika ada caption atau link, simpan di file <code>.txt</code> dengan nama yang sama (mis. <code>poster1.jpg</code> + <code>poster1.txt</code>). File akan diambil saat tombol <b>Kumpulkan</b> ditekan atau saat <code>/radar</code> dijalankan.</p>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,46 @@
+{# Kartu satu prospek. Butuh variabel: p, pengaturan #}
+{% set darurat = mendesak(p, pengaturan.hari_mendesak) %}
+{% set lewat = p.sisa_hari is not none and p.sisa_hari < 0 %}
+<article class="bg-white rounded-xl border p-4 flex gap-4 {{ 'border-red-400 ring-2 ring-red-100' if darurat else 'border-stone-200' }} {{ 'opacity-60' if lewat }}">
+  {% if p.path_gambar %}
+  <a href="/prospek/{{ p.id }}" class="shrink-0 hidden sm:block">
+    <img src="/media/{{ p.path_gambar }}" alt="" loading="lazy" class="w-20 h-24 object-cover rounded-lg border border-stone-200">
+  </a>
+  {% endif %}
+  <div class="flex-1 min-w-0">
+    <div class="flex items-start justify-between gap-3">
+      <a href="/prospek/{{ p.id }}" class="font-semibold leading-snug hover:text-orange-700 break-words">{{ p.judul }}</a>
+      {% if p.skor is not none %}
+      <span class="shrink-0 rounded-lg px-2 py-0.5 text-sm font-bold {{ 'bg-emerald-100 text-emerald-800' if p.skor >= pengaturan.ambang_skor else 'bg-stone-100 text-stone-500' }}" title="Skor">{{ p.skor }}/10</span>
+      {% endif %}
+    </div>
+
+    <div class="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-sm text-stone-600">
+      <span>
+        📅 {{ tanggal_pendek(p.tanggal_acara) if p.tanggal_acara else 'Tanggal belum diketahui' }}
+        {% if p.tanggal_acara %}
+        <b class="{{ 'text-red-600' if darurat else ('text-stone-400' if lewat else 'text-stone-800') }}">· {{ label_sisa_hari(p.sisa_hari) }}</b>
+        {% endif %}
+      </span>
+      {% if p.lokasi or p.kota %}<span class="break-words">📍 {{ p.lokasi or KOTA[p.kota] }}</span>{% endif %}
+      {% if p.jenis_acara %}<span>🏷️ {{ JENIS_ACARA[p.jenis_acara] }}</span>{% endif %}
+      {% if p.perkiraan_peserta %}<span>👥 ±{{ p.perkiraan_peserta }}</span>{% endif %}
+    </div>
+
+    {% if p.kontak_ig or p.kontak_wa %}
+    <div class="mt-1 flex flex-wrap gap-x-4 text-sm">
+      {% if p.kontak_ig %}<a href="https://www.instagram.com/{{ p.kontak_ig }}/" target="_blank" rel="noopener" class="text-orange-700 hover:underline">@{{ p.kontak_ig }}</a>{% endif %}
+      {% if p.kontak_wa %}<span class="text-stone-700">WA {{ p.kontak_wa }}</span>{% endif %}
+    </div>
+    {% elif p.status == 'belum_diproses' and p.caption %}
+    <p class="mt-1 text-sm text-stone-500 line-clamp-2">{{ p.caption }}</p>
+    {% endif %}
+
+    <div class="mt-3 flex flex-wrap items-center gap-2 text-sm">
+      <span class="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-700">{{ STATUS[p.status] }}</span>
+      {% if p.permalink %}
+      <a href="{{ p.permalink }}" target="_blank" rel="noopener" class="rounded-lg border border-stone-300 px-3 py-1.5 hover:bg-stone-50">Buka postingan</a>
+      {% endif %}
+    </div>
+  </div>
+</article>
