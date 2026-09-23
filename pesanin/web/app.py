@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import re
 from datetime import date
 from pathlib import Path
@@ -17,7 +18,7 @@ from sqlalchemy.orm import Session
 from .. import config, layanan, normalisasi
 from ..collectors import jalankan_semua
 from ..db import buka_sesi
-from ..format import label_sisa_hari, nomor_wa, tanggal_panjang, tanggal_pendek, waktu
+from ..format import BULAN, label_sisa_hari, nomor_wa, tanggal_panjang, tanggal_pendek, waktu
 from ..konstanta import (
     BATAS_HASHTAG_UNIK,
     JENIS_ACARA,
@@ -324,6 +325,60 @@ def jalankan_collect(db: Session = Depends(get_db)):
     ringkas = "; ".join(f"{h.label}: {h.ringkas()}" for h in hasil)
     ada_galat = any(h.galat for h in hasil)
     return alihkan("/", f"Selesai mengumpulkan. {ringkas}", "galat" if ada_galat else "ok")
+
+
+# ---------------------------------------------------------------------------
+# Ringkasan
+# ---------------------------------------------------------------------------
+
+PILIHAN_MINGGU = (4, 8, 12, 26)
+# Slot kategorikal 1-3 (sudah divalidasi aman untuk buta warna, semua pasangan).
+GRAFIK = (
+    ("prospek", "Prospek baru", "#2a78d6"),
+    ("dm", "DM terkirim", "#eb6834"),
+    ("deal", "Deal", "#1baf7a"),
+)
+
+
+def _sumbu(maks: int) -> tuple[int, list[int]]:
+    """Batas atas dan tick bulat untuk sumbu Y (2-5 tick)."""
+    for langkah in (1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000):
+        if maks <= langkah * 4:
+            atas = langkah * max(1, math.ceil(maks / langkah))
+            return atas, list(range(0, atas + 1, langkah))
+    return maks, [0, maks]
+
+
+def _label_minggu(d: date) -> str:
+    return f"{d.day} {BULAN[d.month - 1][:3]}"
+
+
+@app.get("/ringkasan")
+def halaman_ringkasan(request: Request, minggu: int = 8, db: Session = Depends(get_db)):
+    if minggu not in PILIHAN_MINGGU:
+        minggu = 8
+    data = layanan.ringkasan(db, minggu)
+    grafik = []
+    for kunci, judul, warna in GRAFIK:
+        atas, tick = _sumbu(max(m[kunci] for m in data["minggu"]))
+        grafik.append({
+            "kunci": kunci, "judul": judul, "warna": warna, "tick": tick, "atas": atas,
+            "total": data["total"][kunci],
+            "kolom": [
+                {"label": _label_minggu(m["mulai"]), "nilai": m[kunci], "persen": m[kunci] / atas * 100}
+                for m in data["minggu"]
+            ],
+        })
+    st = layanan.statistik(db)
+    per_kota = sorted(
+        ((KOTA.get(k, "Belum diketahui") if k else "Belum diketahui", v) for k, v in data["per_kota"].items()),
+        key=lambda x: -x[1]["prospek"],
+    )
+    return render(
+        request, db, "ringkasan.html", halaman="ringkasan", data=data, grafik=grafik, minggu=minggu,
+        PILIHAN_MINGGU=PILIHAN_MINGGU, per_kota=per_kota, st=st,
+        label_minggu=[_label_minggu(m["mulai"]) for m in data["minggu"]],
+    )
 
 
 # ---------------------------------------------------------------------------

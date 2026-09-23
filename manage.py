@@ -180,7 +180,7 @@ def cmd_skema(args) -> int:
     print("Format JSON untuk `save-result` (semua kunci memakai huruf kecil):\n")
     print(json.dumps(contoh_hasil(), ensure_ascii=False, indent=2))
     print(f"\nKolom yang diizinkan: {', '.join(SEMUA_KOLOM)}")
-    print(f"Wajib selalu: relevan (true/false), skor (1-10), jenis_acara, alasan.")
+    print("Wajib selalu: relevan (true/false), skor (1-10), jenis_acara, alasan.")
     print(f"Jika skor >= {ambang} (ambang saat ini): semua kolom wajib ada; isi null jika tidak diketahui.")
     print("Tanggal: 'YYYY-MM-DD'. Peserta: angka bulat. WA: teks, mis. '081234567890'.")
     print(f"\njenis_acara: {', '.join(JENIS_ACARA)}")

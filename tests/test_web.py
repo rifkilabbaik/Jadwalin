@@ -130,3 +130,17 @@ def test_pengaturan(db, klien):
     assert layanan.ambil_pengaturan(db) == {"ambang_skor": 7, "hari_mendesak": 5}
     r = klien.post("/pengaturan/umum", data={"ambang_skor": "11", "hari_mendesak": "5"}, follow_redirects=False)
     assert "jenis=galat" in r.headers["location"]
+
+
+def test_ringkasan(db, klien):
+    post = buat_prospek(db, "Arisan", 5)
+    layanan.ubah_status(db, post, "nego")
+    layanan.ubah_status(db, post, "deal")
+    db.commit()
+    data = layanan.ringkasan(db, 4)
+    # Langsung dari Baru ke Nego tetap dihitung sebagai DM terkirim; tiap postingan dihitung sekali.
+    assert data["total"] == {"prospek": 1, "dm": 1, "deal": 1}
+    assert data["tingkat_deal"] == 1.0
+    html = klien.get("/ringkasan?minggu=12").text
+    assert "Prospek baru per minggu" in html and "100%" in html
+    assert klien.get("/ringkasan?minggu=999").status_code == 200

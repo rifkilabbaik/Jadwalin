@@ -378,3 +378,57 @@ def ringkas_prospek(post: Postingan) -> dict:
         "kontak_ig": post.kontak_ig,
         "kontak_wa": post.kontak_wa,
     }
+
+
+# ---------------------------------------------------------------------------
+# Ringkasan mingguan
+# ---------------------------------------------------------------------------
+
+# Metrik ringkasan -> status yang menandai peristiwanya. Tiap postingan dihitung
+# sekali per metrik, pada saat pertama kali mencapai salah satu status itu
+# (prospek yang langsung ditandai Sudah DM tetap terhitung sebagai prospek).
+METRIK_RINGKASAN = {
+    "prospek": ("baru", *STATUS_DIHUBUNGI),
+    "dm": STATUS_DIHUBUNGI,
+    "deal": ("deal",),
+}
+
+
+def awal_minggu(d: date) -> date:
+    return d - timedelta(days=d.weekday())
+
+
+def ringkasan(db: Session, jumlah_minggu: int = 8) -> dict:
+    """Prospek baru, DM terkirim, dan deal per minggu (Senin-Minggu), plus per kota."""
+    minggu_ini = awal_minggu(hari_ini())
+    mulai = minggu_ini - timedelta(weeks=jumlah_minggu - 1)
+    daftar_minggu = [mulai + timedelta(weeks=i) for i in range(jumlah_minggu)]
+    per_minggu = {m: {k: 0 for k in METRIK_RINGKASAN} for m in daftar_minggu}
+    per_kota: dict[str | None, dict[str, int]] = {}
+
+    semua_status = {s for daftar in METRIK_RINGKASAN.values() for s in daftar}
+    baris = db.execute(
+        select(RiwayatStatus.postingan_id, RiwayatStatus.ke, RiwayatStatus.waktu, Postingan.kota)
+        .join(Postingan, Postingan.id == RiwayatStatus.postingan_id)
+        .where(RiwayatStatus.ke.in_(semua_status))
+        .order_by(RiwayatStatus.waktu)
+    ).all()
+    sudah: set[tuple[int, str]] = set()
+    for post_id, ke, waktu, kota in baris:
+        for metrik, status in METRIK_RINGKASAN.items():
+            if ke not in status or (post_id, metrik) in sudah:
+                continue
+            sudah.add((post_id, metrik))
+            minggu = awal_minggu(waktu.date())
+            if minggu in per_minggu:
+                per_minggu[minggu][metrik] += 1
+                per_kota.setdefault(kota, {k: 0 for k in METRIK_RINGKASAN})[metrik] += 1
+
+    total = {k: sum(m[k] for m in per_minggu.values()) for k in METRIK_RINGKASAN}
+    return {
+        "mulai": mulai,
+        "minggu": [{"mulai": m, **per_minggu[m]} for m in daftar_minggu],
+        "total": total,
+        "tingkat_deal": total["deal"] / total["dm"] if total["dm"] else None,
+        "per_kota": per_kota,
+    }

@@ -115,3 +115,30 @@ document.addEventListener("click", async (ev) => {
     document.querySelector(hariIni.dataset.isiHariIni).value = iso;
   }
 });
+
+// Tooltip grafik ringkasan: nilai di depan, label di belakang.
+function tampilkanTip(el) {
+  const tip = document.getElementById("tip-grafik");
+  if (!tip) return;
+  tip.querySelector('[data-isi="nilai"]').textContent = el.dataset.tipNilai;
+  tip.querySelector('[data-isi="label"]').textContent = el.dataset.tipLabel;
+  tip.classList.remove("hidden");
+  const kotak = el.getBoundingClientRect();
+  const lebar = tip.offsetWidth;
+  const kiri = Math.min(Math.max(8, kotak.left + kotak.width / 2 - lebar / 2), window.innerWidth - lebar - 8);
+  tip.style.left = `${kiri}px`;
+  tip.style.top = `${Math.max(8, kotak.top - tip.offsetHeight - 8)}px`;
+}
+
+function sembunyikanTip() {
+  const tip = document.getElementById("tip-grafik");
+  if (tip) tip.classList.add("hidden");
+}
+
+document.querySelectorAll("[data-tip-nilai]").forEach((el) => {
+  el.addEventListener("pointerenter", () => tampilkanTip(el));
+  el.addEventListener("focus", () => tampilkanTip(el));
+  el.addEventListener("pointerleave", sembunyikanTip);
+  el.addEventListener("blur", sembunyikanTip);
+});
+window.addEventListener("scroll", sembunyikanTip, { passive: true });
