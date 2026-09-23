@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#F7F4EC" />
+  <meta name="description" content="Jadwalin — agenda kegiatan toko" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Jadwalin" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <title>Jadwalin</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <div class="splash" id="splash">
+    <div class="spinner"></div>
+    <div class="splash-sub"><span data-i18n="loading">Memuat data</span><span class="loading-dots"></span></div>
+  </div>
+
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-head">
+      <img class="sidebar-logo" src="icons/logo.svg" alt="Jadwalin" width="30" height="30" />
+      <div class="sidebar-brand">Jadwal<span class="brand-accent">in</span></div>
+    </div>
+    <nav class="sidebar-nav">
+      <button class="sidebar-item active" data-page="calendar">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="8" y2="14"/><line x1="12" y1="14" x2="12" y2="14"/><line x1="16" y1="14" x2="16" y2="14"/></svg>
+        <span data-i18n="nav_calendar">Kalender</span>
+      </button>
+      <button class="sidebar-item" data-page="list">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></svg>
+        <span data-i18n="nav_list">Daftar Kegiatan</span>
+      </button>
+      <button class="sidebar-item" data-page="settings">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+        <span data-i18n="nav_settings">Pengaturan</span>
+      </button>
+      <button class="sidebar-item" id="navInstall" hidden>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span data-i18n="nav_install">Install aplikasi</span>
+      </button>
+    </nav>
+  </aside>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <img class="topbar-logo" src="icons/logo.svg" alt="Jadwalin" width="26" height="26" />
+      <button class="icon-btn-square" id="btnMenu" aria-label="Menu">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>
+      </button>
+      <div class="topbar-title" id="pageTitle">Kalender</div>
+      <button class="topbar-filter-btn" id="btnFilter">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <span id="periodLabel">—</span>
+        <span class="filter-count" id="filterCount" hidden></span>
+      </button>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <section class="page active" data-page="calendar">
+      <div class="panel">
+        <div class="action-grid">
+          <button class="btn btn-primary" data-act-add data-i18n="act_add">Tambah kegiatan</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <div class="panel-label" data-i18n="act_calendar">Kalender kegiatan</div>
+          <div class="panel-count" id="calCount">—</div>
+        </div>
+        <div id="actCalendar"></div>
+        <div class="acal-legend" id="actCalLegend"></div>
+      </div>
+    </section>
+
+    <section class="page" data-page="list">
+      <div class="panel">
+        <div class="action-grid">
+          <button class="btn btn-primary" data-act-add data-i18n="act_add">Tambah kegiatan</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div id="listNav"></div>
+        <div class="sum-cards" id="listSummary"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <div class="panel-label" data-i18n="act_list">Daftar kegiatan</div>
+          <div class="panel-count" id="actCount">—</div>
+        </div>
+        <div id="actList"></div>
+        <div class="list-hint" data-i18n="act_tap_edit">Ketuk kegiatan untuk mengubah</div>
+        <button class="btn btn-block" id="btnActReload" style="margin-top:10px;" data-i18n="act_reload">Muat ulang kegiatan</button>
+      </div>
+    </section>
+
+    <section class="page" data-page="settings">
+      <div class="panel">
+        <div class="setting-label" data-i18n="setting_theme">Tema</div>
+        <div class="dropdown-select" data-key="palette"></div>
+      </div>
+
+      <div class="panel">
+        <div class="setting-label" data-i18n="setting_language">Bahasa</div>
+        <div class="dropdown-select" data-key="lang"></div>
+      </div>
+
+      <div class="panel">
+        <div class="setting-label" data-i18n="setting_text">Format text</div>
+        <div class="dropdown-select" data-key="font"></div>
+      </div>
+
+      <div class="panel" id="panelAccess" hidden>
+        <div class="setting-label" data-i18n="setting_regional_access">Regional yang bisa diakses</div>
+        <div class="setting-inline">
+          <div class="dropdown-select" data-key="accessRegionals"></div>
+          <button class="btn btn-primary" id="btnAccessApply" data-i18n="ok">OK</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="setting-label" data-i18n="setting_info">Info data</div>
+        <div class="info-list">
+          <div class="info-row"><span class="info-key" data-i18n="setting_status">Status</span><span class="info-val" id="stStatus">—</span></div>
+          <div class="info-row"><span class="info-key" data-i18n="setting_total_act">Total kegiatan</span><span class="info-val" id="stActCount">—</span></div>
+          <div class="info-row"><span class="info-key" data-i18n="setting_total_store">Toko terdaftar</span><span class="info-val" id="stStoreCount">—</span></div>
+          <div class="info-row"><span class="info-key" data-i18n="setting_last_sync">Sinkron terakhir</span><span class="info-val" id="stLastSync">—</span></div>
+        </div>
+        <button class="btn btn-block" id="btnReload" style="margin-top:10px;" data-i18n="setting_reload">Muat ulang data</button>
+      </div>
+
+      <div class="panel">
+        <div class="setting-label" data-i18n="setting_app">Aplikasi</div>
+        <div class="info-list">
+          <div class="info-row"><span class="info-key" data-i18n="setting_version">Versi</span><span class="info-val" id="stVersion">—</span></div>
+          <div class="info-row"><span class="info-key" data-i18n="setting_install">Install</span><span class="info-val" id="stInstall">—</span></div>
+          <div class="info-row"><span class="info-key" data-i18n="setting_cache_app">Cache app</span><span class="info-val"><button class="btn btn-sm" id="btnClearCache" data-i18n="setting_clear_cache">Bersihkan</button></span></div>
+        </div>
+        <div class="setting-note" id="stInstallHint" hidden></div>
+      </div>
+    </section>
+  </main>
+
+  <div class="modal" id="filterModal" hidden>
+    <div class="modal-backdrop" data-close-modal></div>
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title" data-i18n="filter_title">Filter kegiatan</div>
+      </div>
+      <div class="filter-row">
+        <label data-i18n="filter_month">Bulan</label>
+        <div id="filterMonth"></div>
+      </div>
+      <div id="filterExtra"></div>
+      <div class="modal-actions">
+        <button class="btn" id="filterCancelReset" data-i18n="cancel">Batal</button>
+        <button class="btn btn-primary" id="filterOk" data-i18n="ok">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="actDayModal" hidden>
+    <div class="modal-backdrop" data-close-modal></div>
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title" id="actDayTitle">Kegiatan</div>
+      </div>
+      <div class="modal-sub" id="actDaySub"></div>
+      <div id="actDayBody"></div>
+      <div class="modal-actions">
+        <button class="btn" data-close-modal data-i18n="close">Tutup</button>
+        <button class="btn btn-primary" id="actDayAdd" data-i18n="act_add_on_day">Tambah di tanggal ini</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="actFormModal" hidden>
+    <div class="modal-backdrop" data-close-modal></div>
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title" id="actFormTitle">Tambah kegiatan</div>
+      </div>
+      <div class="modal-sub" id="actFormMeta" hidden></div>
+      <div class="form-grid">
+        <div class="form-row">
+          <label for="actFName" data-i18n="act_name">Nama</label>
+          <input id="actFName" class="form-input" type="text" maxlength="60" autocomplete="off" list="actNameList" />
+          <datalist id="actNameList"></datalist>
+        </div>
+        <div class="form-row">
+          <label for="actFDate" data-i18n="act_date">Tanggal</label>
+          <input id="actFDate" class="form-input" type="date" />
+        </div>
+        <div class="form-row">
+          <label data-i18n="act_store">Toko</label>
+          <div class="dropdown-select" data-key="actFormStore"></div>
+        </div>
+        <div class="form-row">
+          <label data-i18n="act_type">Kegiatan</label>
+          <div class="dropdown-select" data-key="actFormType"></div>
+        </div>
+        <div id="actFormDynamic"></div>
+        <div class="form-row">
+          <label data-i18n="act_status">Status</label>
+          <div class="seg" id="actFormStatus"></div>
+        </div>
+      </div>
+      <div class="form-error" id="actFormError" hidden></div>
+      <div class="modal-actions">
+        <button class="btn" data-close-modal data-i18n="cancel">Batal</button>
+        <button class="btn btn-primary" id="actFormSave" data-i18n="save">Simpan</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" hidden></div>
+
+  <script src="js/config.js"></script>
+  <script src="js/sheets.js"></script>
+  <script src="js/app.js"></script>
+
+  <script>
+    if ('serviceWorker' in navigator) {
+      const hadController = !!navigator.serviceWorker.controller;
+      let reloaded = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!hadController || reloaded) return;
+        reloaded = true;
+        window.location.reload();
+      });
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('service-worker.js')
+          .then(reg => reg.update())
+          .catch(() => {});
+      });
+    }
+  </script>
+</body>
+</html>
