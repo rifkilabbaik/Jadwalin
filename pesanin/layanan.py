@@ -15,6 +15,7 @@ from . import config, normalisasi
 from .config import hari_ini, sekarang
 from .konstanta import (
     DEFAULT_HASHTAG,
+    JENDELA_HASHTAG_HARI,
     DEFAULT_PENGATURAN,
     DEFAULT_PENGECUALIAN,
     MAKS_UKURAN_GAMBAR,
@@ -26,6 +27,7 @@ from .konstanta import (
 from .models import (
     Hashtag,
     KataPengecualian,
+    PemakaianHashtag,
     Pengaturan,
     Postingan,
     RiwayatStatus,
@@ -69,6 +71,21 @@ def simpan_pengaturan(db: Session, **nilai: int) -> None:
             db.add(Pengaturan(kunci=kunci, nilai=str(isi)))
         else:
             baris.nilai = str(isi)
+
+
+def pemakaian_hashtag(db: Session) -> dict[str, datetime]:
+    """Hashtag yang di-query dalam 7 hari terakhir -> kapan slotnya bebas lagi."""
+    batas = sekarang() - timedelta(days=JENDELA_HASHTAG_HARI)
+    baris = db.execute(
+        select(PemakaianHashtag.hashtag, func.max(PemakaianHashtag.waktu))
+        .where(PemakaianHashtag.waktu >= batas)
+        .group_by(PemakaianHashtag.hashtag)
+    ).all()
+    return {nama: terakhir + timedelta(days=JENDELA_HASHTAG_HARI) for nama, terakhir in baris}
+
+
+def catat_pemakaian_hashtag(db: Session, nama: str) -> None:
+    db.add(PemakaianHashtag(hashtag=nama))
 
 
 # ---------------------------------------------------------------------------

@@ -97,3 +97,36 @@ def test_hapus(db, klien):
 def test_tolak_asal_lain(db, klien):
     r = klien.post("/tambah", data={"caption": "x"}, headers={"origin": "https://situs-lain.example"})
     assert r.status_code == 403
+
+
+def test_pengaturan(db, klien):
+    from sqlalchemy import select
+
+    from pesanin.models import AkunPantauan, Hashtag, KataPengecualian
+
+    assert klien.get("/pengaturan").status_code == 200
+    r = klien.post("/pengaturan/hashtag", data={"isi": "#SeminarCirebon, wisudagarut  bukan-valid"}, follow_redirects=False)
+    assert "tidak+valid" in r.headers["location"]
+    nama = set(db.scalars(select(Hashtag.nama)))
+    assert {"seminarcirebon", "wisudagarut"} <= nama and "bukan-valid" not in nama
+
+    klien.post("/pengaturan/akun", data={"isi": "@Info.Bandung https://www.instagram.com/bem.kampus/"})
+    assert set(db.scalars(select(AkunPantauan.username))) == {"info.bandung", "bem.kampus"}
+
+    klien.post("/pengaturan/pengecualian", data={"isi": "Jual Beli Akun, promo pulsa"})
+    kata = db.scalar(select(KataPengecualian).where(KataPengecualian.kata == "jual beli akun"))
+    assert kata is not None and db.scalar(select(KataPengecualian).where(KataPengecualian.kata == "promo pulsa"))
+
+    akun = db.scalar(select(AkunPantauan).where(AkunPantauan.username == "bem.kampus"))
+    klien.post(f"/pengaturan/akun/{akun.id}/aktif")
+    db.refresh(akun)
+    assert akun.aktif is False
+    id_kata = kata.id
+    klien.post(f"/pengaturan/pengecualian/{id_kata}/hapus")
+    db.expire_all()
+    assert db.get(KataPengecualian, id_kata) is None
+
+    klien.post("/pengaturan/umum", data={"ambang_skor": "7", "hari_mendesak": "5"})
+    assert layanan.ambil_pengaturan(db) == {"ambang_skor": 7, "hari_mendesak": 5}
+    r = klien.post("/pengaturan/umum", data={"ambang_skor": "11", "hari_mendesak": "5"}, follow_redirects=False)
+    assert "jenis=galat" in r.headers["location"]

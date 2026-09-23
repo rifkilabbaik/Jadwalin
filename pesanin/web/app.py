@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date
 from pathlib import Path
 from urllib.parse import quote, urlencode, urlsplit
@@ -17,8 +18,16 @@ from .. import config, layanan, normalisasi
 from ..collectors import jalankan_semua
 from ..db import buka_sesi
 from ..format import label_sisa_hari, nomor_wa, tanggal_panjang, tanggal_pendek, waktu
-from ..konstanta import JENIS_ACARA, KOTA, MAKS_UKURAN_GAMBAR, STATUS, STATUS_AKTIF, SUMBER
-from ..models import Postingan
+from ..konstanta import (
+    BATAS_HASHTAG_UNIK,
+    JENIS_ACARA,
+    KOTA,
+    MAKS_UKURAN_GAMBAR,
+    STATUS,
+    STATUS_AKTIF,
+    SUMBER,
+)
+from ..models import AkunPantauan, Hashtag, KataPengecualian, Postingan
 
 FOLDER = Path(__file__).resolve().parent
 config.MEDIA_DIR.mkdir(parents=True, exist_ok=True)
@@ -315,3 +324,111 @@ def jalankan_collect(db: Session = Depends(get_db)):
     ringkas = "; ".join(f"{h.label}: {h.ringkas()}" for h in hasil)
     ada_galat = any(h.galat for h in hasil)
     return alihkan("/", f"Selesai mengumpulkan. {ringkas}", "galat" if ada_galat else "ok")
+
+
+# ---------------------------------------------------------------------------
+# Pengaturan
+# ---------------------------------------------------------------------------
+
+
+def _kata(teks: str) -> str:
+    kata = " ".join(teks.lower().split())
+    if not 2 <= len(kata) <= 100:
+        raise ValueError(f"Kata pengecualian {teks!r} harus 2-100 karakter.")
+    return kata
+
+
+# jenis -> (model, kolom, fungsi normalisasi, label)
+DAFTAR_PENGATURAN = {
+    "hashtag": (Hashtag, "nama", normalisasi.hashtag, "Hashtag"),
+    "akun": (AkunPantauan, "username", normalisasi.username, "Akun"),
+    "pengecualian": (KataPengecualian, "kata", _kata, "Kata pengecualian"),
+}
+
+
+def _pecah(teks: str, jenis: str) -> list[str]:
+    # Kata pengecualian boleh berisi spasi, jadi hanya dipisah koma/baris baru.
+    pemisah = r"[,\n]+" if jenis == "pengecualian" else r"[\s,]+"
+    return [b for b in re.split(pemisah, teks) if b.strip()]
+
+
+@app.get("/pengaturan")
+def pengaturan(request: Request, db: Session = Depends(get_db)):
+    pemakaian = layanan.pemakaian_hashtag(db)
+    return render(
+        request, db, "pengaturan.html", halaman="pengaturan",
+        hashtag=db.scalars(select(Hashtag).order_by(Hashtag.aktif.desc(), Hashtag.nama)).all(),
+        akun=db.scalars(select(AkunPantauan).order_by(AkunPantauan.aktif.desc(), AkunPantauan.username)).all(),
+        pengecualian=db.scalars(select(KataPengecualian).order_by(KataPengecualian.kata)).all(),
+        pemakaian=sorted(pemakaian.items(), key=lambda x: x[1]),
+        batas_hashtag=BATAS_HASHTAG_UNIK,
+        graph_aktif=config.graph_api_aktif(),
+        ig_user_id=config.IG_USER_ID,
+        versi_api=config.GRAPH_API_VERSION,
+        inbox=config.INBOX_DIR,
+    )
+
+
+@app.post("/pengaturan/umum")
+def simpan_pengaturan_umum(
+    ambang_skor: str = Form(...), hari_mendesak: str = Form(...), db: Session = Depends(get_db)
+):
+    ambang = _int(ambang_skor, 1, 10)
+    hari = _int(hari_mendesak, 1, 30)
+    if ambang is None or hari is None:
+        return alihkan("/pengaturan", "Ambang skor harus 1-10 dan batas mendesak 1-30 hari.", "galat")
+    layanan.simpan_pengaturan(db, ambang_skor=ambang, hari_mendesak=hari)
+    db.commit()
+    return alihkan("/pengaturan", "Pengaturan penilaian tersimpan.")
+
+
+@app.post("/pengaturan/{jenis}")
+def tambah_pengaturan(jenis: str, isi: str = Form(""), db: Session = Depends(get_db)):
+    if jenis not in DAFTAR_PENGATURAN:
+        raise HTTPException(404)
+    model, kolom, fungsi, label = DAFTAR_PENGATURAN[jenis]
+    ditambah, salah = [], []
+    for bagian in _pecah(isi, jenis):
+        try:
+            nilai = fungsi(bagian)
+        except ValueError as e:
+            salah.append(str(e))
+            continue
+        if db.scalar(select(model).where(getattr(model, kolom) == nilai)) is None and nilai not in ditambah:
+            db.add(model(**{kolom: nilai}))
+            ditambah.append(nilai)
+    db.commit()
+    pesan = f"{label} ditambahkan: {', '.join(ditambah)}." if ditambah else f"Tidak ada {label.lower()} baru."
+    if jenis == "hashtag":
+        aktif = len(db.scalars(select(Hashtag).where(Hashtag.aktif.is_(True))).all())
+        if aktif > BATAS_HASHTAG_UNIK:
+            salah.append(
+                f"Ada {aktif} hashtag aktif, melebihi batas Instagram {BATAS_HASHTAG_UNIK} hashtag unik per 7 hari; "
+                "sebagian akan dilewati."
+            )
+    if salah:
+        return alihkan(f"/pengaturan#{jenis}", f"{pesan} {' '.join(salah)}", "galat")
+    return alihkan(f"/pengaturan#{jenis}", pesan)
+
+
+@app.post("/pengaturan/{jenis}/{id}/aktif")
+def ubah_aktif_pengaturan(jenis: str, id: int, db: Session = Depends(get_db)):
+    if jenis not in ("hashtag", "akun"):
+        raise HTTPException(404)
+    baris = db.get(DAFTAR_PENGATURAN[jenis][0], id)
+    if baris is None:
+        raise HTTPException(404)
+    baris.aktif = not baris.aktif
+    db.commit()
+    return alihkan(f"/pengaturan#{jenis}")
+
+
+@app.post("/pengaturan/{jenis}/{id}/hapus")
+def hapus_pengaturan(jenis: str, id: int, db: Session = Depends(get_db)):
+    if jenis not in DAFTAR_PENGATURAN:
+        raise HTTPException(404)
+    baris = db.get(DAFTAR_PENGATURAN[jenis][0], id)
+    if baris is not None:
+        db.delete(baris)
+        db.commit()
+    return alihkan(f"/pengaturan#{jenis}")
