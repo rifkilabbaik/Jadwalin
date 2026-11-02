@@ -37,6 +37,7 @@ const Sheets = {
   },
   async addActivity(row)      { return (await this._post({ action: 'addKegiatan', row })).data; },
   async updateActivity(row)   { return (await this._post({ action: 'updateKegiatan', row })).data; },
+  async deleteActivity(id)    { return (await this._post({ action: 'deleteKegiatan', id })).data; },
 
   saveList(key, rows) {
     try { localStorage.setItem(key, JSON.stringify({ ts: Date.now(), data: rows })); }

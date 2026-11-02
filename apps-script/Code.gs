@@ -46,6 +46,7 @@ function doPost(e) {
     const b = JSON.parse(e.postData.contents);
     if (b.action === 'addKegiatan')    return { status: 'ok', data: _addKegiatan(b.row || {}) };
     if (b.action === 'updateKegiatan') return { status: 'ok', data: _updateKegiatan(b.row || {}) };
+    if (b.action === 'deleteKegiatan') return { status: 'ok', data: _deleteKegiatan(b.id) };
     throw new Error('Unknown action: ' + b.action);
   });
 }
@@ -154,19 +155,34 @@ function _updateKegiatan(row) {
   return _withLock(() => {
     const sheet = _getSheetSoft(SHEETS.DATA, DATA_FIELDS);
     const ix = _index(sheet, DATA_FIELDS, DATA_FIELDS.map(f => f[0]));
-    const last = sheet.getLastRow();
-    if (last < 2) throw new Error('Kegiatan tidak ditemukan');
-    const ids = sheet.getRange(2, ix.col.id + 1, last - 1, 1).getValues();
-    let target = 0;
-    for (let i = 0; i < ids.length; i++) {
-      if (_str(ids[i][0]) === id) { target = i + 2; break; }
-    }
-    if (!target) throw new Error('Kegiatan tidak ditemukan. Muat ulang data lalu coba lagi.');
+    const target = _findRow(sheet, ix, id);
     clean.status = clean.status || STATUSES[0];
     clean.updatedAt = _now();
     _writeFields(sheet, ix, target, clean);
     return _toRecord(sheet.getRange(target, 1, 1, ix.width).getValues()[0], ix, target);
   });
+}
+
+function _deleteKegiatan(rawId) {
+  const id = _str(rawId);
+  if (!id) throw new Error('ID kegiatan kosong');
+  return _withLock(() => {
+    const sheet = _getSheetSoft(SHEETS.DATA, DATA_FIELDS);
+    const ix = _index(sheet, DATA_FIELDS, ['id']);
+    sheet.deleteRow(_findRow(sheet, ix, id));
+    return { id: id };
+  });
+}
+
+function _findRow(sheet, ix, id) {
+  const last = sheet.getLastRow();
+  if (last >= 2) {
+    const ids = sheet.getRange(2, ix.col.id + 1, last - 1, 1).getValues();
+    for (let i = 0; i < ids.length; i++) {
+      if (_str(ids[i][0]) === id) return i + 2;
+    }
+  }
+  throw new Error('Kegiatan tidak ditemukan. Muat ulang data lalu coba lagi.');
 }
 
 function _validate(row) {
