@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="theme-color" content="#F7F4EC" />
+  <meta name="theme-color" content="#F2F6F5" />
   <meta name="description" content="Jadwalin — agenda kegiatan toko" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="mobile-web-app-capable" content="yes" />
@@ -13,218 +13,126 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" type="image/svg+xml" href="icons/icon.svg" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600&family=Nunito:wght@400;700;800&display=swap" />
   <link rel="stylesheet" href="css/style.css" />
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('jw_theme'), p = localStorage.getItem('jw_palette');
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+        if (p === 'lavender' || p === 'peach') document.documentElement.dataset.palette = p;
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+      <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+      <symbol id="i-filter" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/></symbol>
+      <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></symbol>
+      <symbol id="i-chev-l" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></symbol>
+      <symbol id="i-chev-r" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+      <symbol id="i-chev-d" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol>
+      <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+      <symbol id="i-chat" viewBox="0 0 24 24"><path d="M20.5 11.6a8.4 8.4 0 01-12.3 7.4L3.5 20.5l1.5-4.5a8.4 8.4 0 1115.5-4.4z"/><path d="M9 10.2c.4 1.8 2 3.4 3.8 3.9"/></symbol>
+      <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></symbol>
+      <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></symbol>
+      <symbol id="i-school" viewBox="0 0 24 24"><path d="M4 20V11l8-5 8 5v9"/><path d="M9.5 20v-5h5v5"/><path d="M12 6V2.5l3.5 1.5L12 5.5"/></symbol>
+      <symbol id="i-people" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><circle cx="17.2" cy="9" r="2.5"/><path d="M3 19.5c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M15.2 13.8c.6-.2 1.3-.3 2-.3 2.6 0 4.8 2.1 4.8 4.8"/></symbol>
+      <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0112 7.1a4.3 4.3 0 017.5 2.7C19.5 15.4 12 20 12 20z"/></symbol>
+      <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-6.5-5.8-6.5-11.2a6.5 6.5 0 1113 0C18.5 15.2 12 21 12 21z"/><circle cx="12" cy="9.8" r="2.3"/></symbol>
+      <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></symbol>
+      <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
+      <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 11-2.6-5.9"/><path d="M20 4v5h-5"/></symbol>
+      <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="4"/><path d="M3.5 10h17M8.5 3v4M15.5 3v4"/></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></symbol>
+      <symbol id="i-tag" viewBox="0 0 24 24"><path d="M3.5 12.5V5a1.5 1.5 0 011.5-1.5h7.5l8 8-9 9-8-8z"/><circle cx="8.5" cy="8.5" r="1.6"/></symbol>
+      <symbol id="i-logo" viewBox="0 0 48 48"><rect x="4" y="9" width="40" height="35" rx="15" style="fill:var(--primary);stroke:none"/><rect x="12.5" y="3.5" width="7.5" height="12" rx="3.75" style="fill:var(--sun);stroke:none"/><rect x="28" y="3.5" width="7.5" height="12" rx="3.75" style="fill:var(--sun);stroke:none"/><path d="M16 27.5l5.5 5.5L32 22.5" style="fill:none;stroke:var(--on-primary);stroke-width:4.6;stroke-linecap:round;stroke-linejoin:round"/></symbol>
+    </defs>
+  </svg>
 
   <div class="splash" id="splash">
+    <svg class="logo splash-logo" aria-hidden="true"><use href="#i-logo"/></svg>
     <div class="spinner"></div>
-    <div class="splash-sub"><span data-i18n="loading">Memuat data</span><span class="loading-dots"></span></div>
+    <div class="splash-msg" id="splashMsg">Memuat data<span class="loading-dots"></span></div>
   </div>
 
-  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
-  <aside class="sidebar" id="sidebar">
-    <div class="sidebar-head">
-      <img class="sidebar-logo" src="icons/logo.svg" alt="Jadwalin" width="30" height="30" />
-      <div class="sidebar-brand">Jadwal<span class="brand-accent">in</span></div>
+  <div class="app" id="app">
+    <header class="top">
+      <div class="brand">
+        <svg class="logo" aria-hidden="true"><use href="#i-logo"/></svg>
+        <span class="wordmark">Jadwal<span>in</span></span>
+      </div>
+      <div class="greet">
+        <div class="eyebrow" id="todayLabel"></div>
+        <div class="hello" id="helloLabel">Halo!</div>
+      </div>
+      <label class="search" id="searchBox">
+        <svg class="i" aria-hidden="true"><use href="#i-search"/></svg>
+        <input type="search" id="q" placeholder="Cari kegiatan, toko, atau PIC" autocomplete="off" aria-label="Cari kegiatan" />
+      </label>
+      <button class="round search-btn" id="btnSearch" aria-label="Cari" aria-expanded="false"><svg class="i"><use href="#i-search"/></svg></button>
+      <button class="round" id="btnFilter" aria-label="Filter"><svg class="i"><use href="#i-filter"/></svg><span class="badge-dot" id="filterDot" hidden></span></button>
+      <button class="round" id="btnSettings" aria-label="Pengaturan"><svg class="i"><use href="#i-gear"/></svg></button>
+      <button class="add-btn" id="btnAdd"><svg class="i"><use href="#i-plus"/></svg>Tambah kegiatan</button>
+    </header>
+
+    <div class="stats" id="stats"></div>
+
+    <div class="main">
+      <section class="card cal" aria-label="Kalender kegiatan">
+        <div class="cal-head">
+          <h2 class="cal-title" id="calTitle">—</h2>
+          <button class="mini-round" id="calPrev" aria-label="Sebelumnya"><svg class="i"><use href="#i-chev-l"/></svg></button>
+          <button class="mini-round" id="calNext" aria-label="Berikutnya"><svg class="i"><use href="#i-chev-r"/></svg></button>
+        </div>
+        <div class="dow" aria-hidden="true"><span>Sen</span><span>Sel</span><span>Rab</span><span>Kam</span><span>Jum</span><span>Sab</span><span>Min</span></div>
+        <div class="days" id="calDays"></div>
+        <div class="cal-foot">
+          <div class="seg small" role="group" aria-label="Tampilan kalender" id="calMode">
+            <button data-mode="bulan">Bulan</button>
+            <button data-mode="minggu">Minggu</button>
+          </div>
+          <button class="chipbtn small" id="calToday" hidden>Hari ini</button>
+          <div class="legend" id="legend"></div>
+        </div>
+      </section>
+      <div class="side" id="side"></div>
     </div>
-    <nav class="sidebar-nav">
-      <button class="sidebar-item active" data-page="calendar">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="8" y2="14"/><line x1="12" y1="14" x2="12" y2="14"/><line x1="16" y1="14" x2="16" y2="14"/></svg>
-        <span data-i18n="nav_calendar">Kalender</span>
+  </div>
+
+  <button class="fab" id="fab"><svg class="i"><use href="#i-plus"/></svg>Tambah</button>
+
+  <div class="scrim" id="scrim" hidden></div>
+
+  <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawerTitle" hidden>
+    <div class="drawer-head">
+      <button class="round" id="drawerClose" aria-label="Tutup">
+        <svg class="i only-phone"><use href="#i-chev-l"/></svg>
+        <svg class="i only-wide"><use href="#i-x"/></svg>
       </button>
-      <button class="sidebar-item" data-page="list">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></svg>
-        <span data-i18n="nav_list">Daftar Kegiatan</span>
-      </button>
-      <button class="sidebar-item" data-page="settings">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
-        <span data-i18n="nav_settings">Pengaturan</span>
-      </button>
-      <button class="sidebar-item" id="navInstall" hidden>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        <span data-i18n="nav_install">Install aplikasi</span>
-      </button>
-    </nav>
+      <h2 class="drawer-title" id="drawerTitle"></h2>
+      <span class="spacer"></span>
+    </div>
+    <div class="drawer-body" id="drawerBody"></div>
   </aside>
 
-  <header class="topbar">
-    <div class="topbar-inner">
-      <img class="topbar-logo" src="icons/logo.svg" alt="Jadwalin" width="26" height="26" />
-      <button class="icon-btn-square" id="btnMenu" aria-label="Menu">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>
-      </button>
-      <div class="topbar-title" id="pageTitle">Kalender</div>
-      <button class="topbar-filter-btn" id="btnFilter">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-        <span id="periodLabel">—</span>
-        <span class="filter-count" id="filterCount" hidden></span>
-      </button>
+  <form class="dialog" id="dialog" role="dialog" aria-modal="true" aria-labelledby="dialogTitle" novalidate hidden>
+    <div class="handle"></div>
+    <div class="sheet-head">
+      <h2 id="dialogTitle">Kegiatan baru</h2>
+      <button type="button" class="round" id="dialogClose" aria-label="Tutup"><svg class="i"><use href="#i-x"/></svg></button>
     </div>
-  </header>
+    <div class="dialog-body" id="dialogBody"></div>
+  </form>
 
-  <main class="container">
-
-    <section class="page active" data-page="calendar">
-      <div class="panel">
-        <div class="action-grid">
-          <button class="btn btn-primary" data-act-add data-i18n="act_add">Tambah kegiatan</button>
-        </div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-head">
-          <div class="panel-label" data-i18n="act_calendar">Kalender kegiatan</div>
-          <div class="panel-count" id="calCount">—</div>
-        </div>
-        <div id="actCalendar"></div>
-        <div class="acal-legend" id="actCalLegend"></div>
-      </div>
-    </section>
-
-    <section class="page" data-page="list">
-      <div class="panel">
-        <div class="action-grid">
-          <button class="btn btn-primary" data-act-add data-i18n="act_add">Tambah kegiatan</button>
-        </div>
-      </div>
-
-      <div class="panel">
-        <div id="listNav"></div>
-        <div class="sum-cards" id="listSummary"></div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-head">
-          <div class="panel-label" data-i18n="act_list">Daftar kegiatan</div>
-          <div class="panel-count" id="actCount">—</div>
-        </div>
-        <div id="actList"></div>
-        <div class="list-hint" data-i18n="act_tap_edit">Ketuk kegiatan untuk mengubah</div>
-        <button class="btn btn-block" id="btnActReload" style="margin-top:10px;" data-i18n="act_reload">Muat ulang kegiatan</button>
-      </div>
-    </section>
-
-    <section class="page" data-page="settings">
-      <div class="panel">
-        <div class="setting-label" data-i18n="setting_theme">Tema</div>
-        <div class="dropdown-select" data-key="palette"></div>
-      </div>
-
-      <div class="panel">
-        <div class="setting-label" data-i18n="setting_language">Bahasa</div>
-        <div class="dropdown-select" data-key="lang"></div>
-      </div>
-
-      <div class="panel">
-        <div class="setting-label" data-i18n="setting_text">Format text</div>
-        <div class="dropdown-select" data-key="font"></div>
-      </div>
-
-      <div class="panel" id="panelAccess" hidden>
-        <div class="setting-label" data-i18n="setting_regional_access">Regional yang bisa diakses</div>
-        <div class="setting-inline">
-          <div class="dropdown-select" data-key="accessRegionals"></div>
-          <button class="btn btn-primary" id="btnAccessApply" data-i18n="ok">OK</button>
-        </div>
-      </div>
-
-      <div class="panel">
-        <div class="setting-label" data-i18n="setting_info">Info data</div>
-        <div class="info-list">
-          <div class="info-row"><span class="info-key" data-i18n="setting_status">Status</span><span class="info-val" id="stStatus">—</span></div>
-          <div class="info-row"><span class="info-key" data-i18n="setting_total_act">Total kegiatan</span><span class="info-val" id="stActCount">—</span></div>
-          <div class="info-row"><span class="info-key" data-i18n="setting_total_store">Toko terdaftar</span><span class="info-val" id="stStoreCount">—</span></div>
-          <div class="info-row"><span class="info-key" data-i18n="setting_last_sync">Sinkron terakhir</span><span class="info-val" id="stLastSync">—</span></div>
-        </div>
-        <button class="btn btn-block" id="btnReload" style="margin-top:10px;" data-i18n="setting_reload">Muat ulang data</button>
-      </div>
-
-      <div class="panel">
-        <div class="setting-label" data-i18n="setting_app">Aplikasi</div>
-        <div class="info-list">
-          <div class="info-row"><span class="info-key" data-i18n="setting_version">Versi</span><span class="info-val" id="stVersion">—</span></div>
-          <div class="info-row"><span class="info-key" data-i18n="setting_install">Install</span><span class="info-val" id="stInstall">—</span></div>
-          <div class="info-row"><span class="info-key" data-i18n="setting_cache_app">Cache app</span><span class="info-val"><button class="btn btn-sm" id="btnClearCache" data-i18n="setting_clear_cache">Bersihkan</button></span></div>
-        </div>
-        <div class="setting-note" id="stInstallHint" hidden></div>
-      </div>
-    </section>
-  </main>
-
-  <div class="modal" id="filterModal" hidden>
-    <div class="modal-backdrop" data-close-modal></div>
-    <div class="modal-card">
-      <div class="modal-header">
-        <div class="modal-title" data-i18n="filter_title">Filter kegiatan</div>
-      </div>
-      <div class="filter-row">
-        <label data-i18n="filter_month">Bulan</label>
-        <div id="filterMonth"></div>
-      </div>
-      <div id="filterExtra"></div>
-      <div class="modal-actions">
-        <button class="btn" id="filterCancelReset" data-i18n="cancel">Batal</button>
-        <button class="btn btn-primary" id="filterOk" data-i18n="ok">OK</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="modal" id="actDayModal" hidden>
-    <div class="modal-backdrop" data-close-modal></div>
-    <div class="modal-card">
-      <div class="modal-header">
-        <div class="modal-title" id="actDayTitle">Kegiatan</div>
-      </div>
-      <div class="modal-sub" id="actDaySub"></div>
-      <div id="actDayBody"></div>
-      <div class="modal-actions">
-        <button class="btn" data-close-modal data-i18n="close">Tutup</button>
-        <button class="btn btn-primary" id="actDayAdd" data-i18n="act_add_on_day">Tambah di tanggal ini</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="modal" id="actFormModal" hidden>
-    <div class="modal-backdrop" data-close-modal></div>
-    <div class="modal-card">
-      <div class="modal-header">
-        <div class="modal-title" id="actFormTitle">Tambah kegiatan</div>
-      </div>
-      <div class="modal-sub" id="actFormMeta" hidden></div>
-      <div class="form-grid">
-        <div class="form-row">
-          <label for="actFName" data-i18n="act_name">Nama</label>
-          <input id="actFName" class="form-input" type="text" maxlength="60" autocomplete="off" list="actNameList" />
-          <datalist id="actNameList"></datalist>
-        </div>
-        <div class="form-row">
-          <label for="actFDate" data-i18n="act_date">Tanggal</label>
-          <input id="actFDate" class="form-input" type="date" />
-        </div>
-        <div class="form-row">
-          <label data-i18n="act_store">Toko</label>
-          <div class="dropdown-select" data-key="actFormStore"></div>
-        </div>
-        <div class="form-row">
-          <label data-i18n="act_type">Kegiatan</label>
-          <div class="dropdown-select" data-key="actFormType"></div>
-        </div>
-        <div id="actFormDynamic"></div>
-        <div class="form-row">
-          <label data-i18n="act_status">Status</label>
-          <div class="seg" id="actFormStatus"></div>
-        </div>
-      </div>
-      <div class="form-error" id="actFormError" hidden></div>
-      <div class="modal-actions">
-        <button class="btn" data-close-modal data-i18n="cancel">Batal</button>
-        <button class="btn btn-primary" id="actFormSave" data-i18n="save">Simpan</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="toast" id="toast" hidden></div>
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
   <script src="js/config.js"></script>
   <script src="js/sheets.js"></script>

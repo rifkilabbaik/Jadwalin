@@ -1,6 +1,7 @@
 
 
-const CACHE_NAME = 'jadwalin-v1';
+const CACHE_NAME = 'jadwalin-v2';
+const FONT_CACHE = 'jadwalin-fonts-v1';
 const APP_SHELL = [
   './',
   './index.html',
@@ -25,7 +26,7 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))))
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME && k !== FONT_CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -35,8 +36,15 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
 
-  if (url.hostname.includes('script.google.com') ||
-      url.hostname.includes('googleusercontent.com')) return;
+  if (url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com') {
+    e.respondWith(
+      caches.open(FONT_CACHE).then(c => c.match(req).then(hit => hit || fetch(req).then(res => {
+        if (res && (res.ok || res.type === 'opaque')) c.put(req, res.clone()).catch(() => {});
+        return res;
+      })))
+    );
+    return;
+  }
   if (url.origin !== self.location.origin) return;
 
   e.respondWith(
