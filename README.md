@@ -1,34 +1,46 @@
 # Jadwalin
 
-PWA (bisa di-install) untuk mencatat dan memantau agenda kegiatan toko: yang **akan dilaksanakan** dan yang **sudah dilaksanakan**. Versi 2 bergaya playful, bubbly, dan soft minimalism, dengan tata letak yang menyesuaikan HP, tablet, dan PC.
+PWA (bisa di-install) untuk mencatat dan memantau agenda kegiatan toko: yang **akan dilaksanakan** dan yang **sudah dilaksanakan**. Bergaya playful, bubbly, dan soft minimalism, dengan tata letak yang menyesuaikan HP, tablet, dan PC.
 
 ## Fitur
 
 - **Satu layar Agenda**: ringkasan (hari ini, minggu ini, perlu update, selesai bulan ini), kalender, dan daftar kegiatan.
-- **Kalender kegiatan**: tampilan Bulan atau Minggu. Di HP tiap tanggal diberi titik warna per jenis kegiatan; di tablet/PC nama kegiatannya langsung tertulis di kotak tanggal. Ketuk tanggal untuk melihat kegiatannya.
-- **Daftar kegiatan**: pilih *Tanggal* (kegiatan di tanggal terpilih + yang akan datang) atau *Sebulan* (semua kegiatan di bulan yang dilihat, dibagi Akan dilaksanakan / Sudah dilaksanakan).
-- **Perlu update**: kegiatan yang sudah lewat tapi masih Terjadwal, dengan tombol ✓ (selesai) dan ✕ (batal) langsung di baris.
-- **Tambah & ubah kegiatan**: form dari bawah layar (HP) atau jendela di tengah (tablet/PC). Jenis kegiatan dan tanggal dipilih sekali ketuk; nama pencatat diambil dari Pengaturan.
-- **Detail kegiatan**: ganti status (Terjadwal / Selesai / Batal), bagikan ke WhatsApp, ubah, atau hapus (dengan konfirmasi).
-- **Cari** (nama kegiatan, toko, PIC) dan **filter** (regional, area, toko, jenis kegiatan, PIC).
-- **Pengaturan**: nama, tema (Terang / Gelap / Otomatis), warna (Mint / Lavender / Peach), regional yang ditampilkan, info data & muat ulang, install, bersihkan cache.
+- **Kalender kegiatan** (tata letak seperti Google Calendar, termasuk tanggal bulan sebelum/sesudah). Saat halaman digulir ke bawah di HP/tablet, kalender menempel di atas dan menyusut jadi satu minggu (*Minggu 1, 2, …*); tombol ‹ › lalu berpindah per minggu. Di HP tiap tanggal diberi maksimal 3 tanda: jenis kegiatan yang berbeda didahulukan, dan jika lebih dari 3 kegiatan tanda ketiga menjadi `+N`. Di tablet/PC nama kegiatannya tertulis di kotak tanggal dengan aturan yang sama.
+- **Daftar kegiatan**: pilih *Tanggal* (kegiatan di tanggal terpilih + yang akan datang) atau *Sebulan* (semua kegiatan di bulan yang dilihat, dibagi Akan dilaksanakan / Sudah dilaksanakan). Tiap kartu hanya berisi jenis kegiatan, nama (mis. Nama TK), dan nama toko.
+- **Perlu update**: kegiatan yang sudah lewat tapi masih Terjadwal, dengan tombol ✓ (selesai) dan ✕ (batal) langsung di baris. Kartunya hilang sendiri jika semua sudah diupdate.
+- **Tambah & ubah kegiatan** lewat tombol **+ Tambah**: form dari bawah layar (HP) atau jendela di tengah (tablet/PC). Jika nama belum diisi, pengguna diminta mengisi nama dulu. Nama PIC yang pernah dicatat muncul sebagai saran, dan nomornya terisi otomatis.
+- **Detail kegiatan**: ganti status (Terjadwal / Selesai / Batal), ketuk Nomor PIC untuk chat WhatsApp (wa.me), bagikan ke WhatsApp, ubah, atau hapus (dengan konfirmasi; data dipindah ke sheet `Sampah`).
+- **Cari**: tekan tombol cari, kotak pencarian dan hasilnya muncul melayang di bawah tombol. **Filter**: regional, area, toko, jenis kegiatan, pencatat.
+- **Pengaturan**: nama, tema (Terang / Gelap / Otomatis), warna (Mint / Lavender / Peach), regional yang ditampilkan, info data & muat ulang, install (disembunyikan jika aplikasi sudah terpasang), bersihkan cache.
 - Bisa dibuka tanpa internet (data terakhir tetap tampil). Shortcut ikon aplikasi: *Tambah kegiatan* dan *Kegiatan bulan ini*.
 
 ## Spreadsheet
 
 | Sheet | Isi |
 |---|---|
-| `Data` | Data kegiatan. Kolom dibaca berdasarkan **nama header** (urutan bebas). Kolom yang belum ada ditambahkan otomatis di ujung kanan: `ID`, `Tanggal`, `Nama`, `Nama Toko`, `Kegiatan`, `Keterangan 1`, `Keterangan 2`, `Status`, `Dibuat`, `Diubah`. Kolom lain milik Anda tidak disentuh. |
+| `Data` | Data kegiatan. Kolom dibaca berdasarkan **nama header** (urutan bebas). Kolom yang belum ada ditambahkan otomatis di ujung kanan: `ID`, `Tanggal`, `Nama`, `Nama Toko`, `Kegiatan`, `Keterangan 1`, `Keterangan 2`, `Nama PIC`, `Nomor PIC`, `Keterangan`, `Status`, `Dibuat`, `Diubah`. Kolom lain milik Anda tidak disentuh. |
 | `Daftar Toko` | Acuan nama toko & filter. Header yang dikenali: `Nama Toko` (atau `Toko` / `Nama Store` / `Store` / `Cabang`), `Regional`, `Area`. Sheet ini hanya dibaca. |
+| `Kontak` | Dibuat otomatis. Daftar PIC: `Nama PIC`, `Nomor PIC`, `Toko`, `Dibuat`, `Diubah`. Setiap kegiatan yang disimpan dengan Nama PIC menambah/memperbarui barisnya (nama sama = baris sama). Saat pertama dibuat, isinya diambil dari PIC yang sudah ada di sheet `Data`. |
+| `Sampah` | Dibuat otomatis. Kegiatan yang dihapus dari aplikasi dipindah ke sini, ditambah kolom `Dihapus` (waktu) dan `Dihapus oleh`. Untuk memulihkan, salin barisnya kembali ke `Data`. |
+
+Isian per jenis kegiatan (`Keterangan 1` / `Keterangan 2`):
+
+| Kegiatan | Keterangan 1 | Keterangan 2 | PIC & Keterangan |
+|---|---|---|---|
+| FLD | Nama TK (wajib) | Jumlah peserta | opsional |
+| GCOM | Nama komunitas (wajib) | Jumlah peserta | opsional |
+| CX | Tujuan kunjungan (wajib) | — | opsional |
+| Support Event | Nama Event (wajib) | Support (wajib) | opsional |
+| Lain-lain | Keterangan (wajib) | — | Nama & Nomor PIC opsional |
 
 Catatan:
-- `Keterangan 1/2` mengikuti jenis kegiatan: FLD → Nama TK & Jumlah Peserta, GCOM → Nama Komunitas & Jumlah Peserta, CX → Tujuan Kunjungan. Jumlah Peserta boleh dikosongkan dulu.
 - Baris lama yang belum punya `ID` otomatis diberi ID saat data dimuat (ID dipakai untuk ubah & hapus).
-- `Status` kosong dianggap `Terjadwal`. Menghapus kegiatan menghapus barisnya dari sheet `Data`.
+- `Status` kosong dianggap `Terjadwal`.
+- `Tanggal` dan `Nomor PIC` disimpan sebagai teks agar tidak diubah format oleh Sheets (nol di depan nomor tetap ada).
 
 ## Setup Apps Script
 
-Lakukan setiap kali `apps-script/Code.gs` berubah (versi 2 menambah aksi hapus):
+Lakukan setiap kali `apps-script/Code.gs` berubah (versi 2.1 menambah kolom PIC, sheet `Kontak`, dan sheet `Sampah`):
 
 1. Buka spreadsheet → **Extensions → Apps Script**.
 2. Ganti seluruh isi `Code.gs` dengan isi file [`apps-script/Code.gs`](apps-script/Code.gs), lalu simpan.
@@ -64,6 +76,6 @@ apps-script/Code.gs   backend Google Apps Script
 ## Mengubah tampilan
 
 - **Warna palet**: token ada di `css/style.css` (`:root` untuk Mint, `[data-palette="lavender"]`, `[data-palette="peach"]`). Daftar nama palet dan warna bilah status HP ada di `PALETTES` di `js/config.js`.
-- **Jenis kegiatan**: `ACTIVITY_TYPES` di `js/config.js` (nama, ikon, isian). Warnanya mengacu ke token `--fld`, `--gcom`, `--cx` di CSS.
+- **Jenis kegiatan**: `ACTIVITY_TYPES` di `js/config.js` (nama, ikon, isian). Warnanya mengacu ke token `--fld`, `--gcom`, `--cx`, `--se`, `--lain` di CSS; ikonnya simbol `#i-kid`, `#i-people`, `#i-star`, `#i-handshake`, `#i-clipboard` di `index.html`.
 - **Logo**: ganti `icons/logo.svg`, `icons/icon.svg`, `icons/icon-maskable.svg`, dan PNG turunannya (`icon-192.png`, `icon-512.png`, `icon-maskable-512.png`, `apple-touch-icon.png`) dengan nama file yang sama. Logo di dalam aplikasi ada di simbol `#i-logo` di `index.html`.
 - Setiap rilis: naikkan `CACHE_NAME` di `service-worker.js` dan `APP_VERSION` di `js/config.js` agar perangkat yang sudah install mendapat versi baru.

@@ -1,6 +1,7 @@
 const Sheets = {
   CACHE_KEY_ACTIVITY: 'jadwalin_kegiatan_v1',
   CACHE_KEY_STORE: 'jadwalin_toko_v1',
+  CACHE_KEY_KONTAK: 'jadwalin_kontak_v1',
 
   async _get(action, params) {
     if (!CONFIG.APPS_SCRIPT_URL || CONFIG.APPS_SCRIPT_URL.startsWith('PASTE')) throw new Error('APPS_SCRIPT_URL belum dikonfigurasi.');
@@ -37,7 +38,7 @@ const Sheets = {
   },
   async addActivity(row)      { return (await this._post({ action: 'addKegiatan', row })).data; },
   async updateActivity(row)   { return (await this._post({ action: 'updateKegiatan', row })).data; },
-  async deleteActivity(id)    { return (await this._post({ action: 'deleteKegiatan', id })).data; },
+  async deleteActivity(id, by) { return (await this._post({ action: 'deleteKegiatan', id, by })).data; },
 
   saveList(key, rows) {
     try { localStorage.setItem(key, JSON.stringify({ ts: Date.now(), data: rows })); }
@@ -55,6 +56,7 @@ const Sheets = {
     try {
       localStorage.removeItem(this.CACHE_KEY_ACTIVITY);
       localStorage.removeItem(this.CACHE_KEY_STORE);
+      localStorage.removeItem(this.CACHE_KEY_KONTAK);
     } catch {}
   }
 };

@@ -8,18 +8,19 @@ const addDays = (d, n) => { const x = pd(d); x.setDate(x.getDate() + n); return 
 const weekStart = (d) => { const x = pd(d); x.setDate(x.getDate() - (x.getDay() + 6) % 7); return fmt(x); };
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const ic = (n, cls) => `<svg class="i${cls ? ' ' + cls : ''}" aria-hidden="true"><use href="#i-${n}"/></svg>`;
+const PHONE_RE = /^[0-9+()\-.\s]{6,}$/;
+const SLOTS = ['k1', 'k2', 'picName', 'picPhone', 'note'];
 
 const App = {
-  acts: [], stores: [], storeMeta: {}, storeIndex: {},
+  acts: [], stores: [], contacts: [], storeMeta: {}, storeIndex: {},
   access: [],
   filter: { regional: '', area: '', store: '', type: '', pic: '' },
-  q: '',
   sel: '', y: 0, m: 0,
-  calMode: 'bulan', agendaMode: 'tanggal', nuAll: false,
+  compact: false, agendaMode: 'tanggal', nuAll: false,
   theme: 'auto', palette: 'mint', userName: '', lastStore: '',
   lastSync: null, connected: false,
   overlay: null, drawerKind: null, detailId: null, confirmDel: false, busy: false,
-  draft: null, formError: '', fdraft: null, editingName: false,
+  draft: null, formError: '', fdraft: null, editingName: false, searchOpen: false,
   installEvt: null, installed: false,
 
   async init() {
@@ -38,8 +39,10 @@ const App = {
 
     const ca = Sheets.loadList(Sheets.CACHE_KEY_ACTIVITY);
     const cs = Sheets.loadList(Sheets.CACHE_KEY_STORE);
+    const ck = Sheets.loadList(Sheets.CACHE_KEY_KONTAK);
     if (ca) {
       this.stores = cs ? cs.data : [];
+      this.contacts = ck ? ck.data : [];
       this.acts = ca.data;
       this.lastSync = ca.ts;
       this.buildStores();
@@ -63,7 +66,6 @@ const App = {
     this.palette = CONFIG.PALETTES[pa] ? pa : 'mint';
     this.userName = this.read('jw_name') || this.read('lastName') || '';
     this.lastStore = this.read('jw_store') || '';
-    this.calMode = this.read('jw_calmode') === 'minggu' ? 'minggu' : 'bulan';
     this.agendaMode = this.read('jw_agenda') === 'bulan' ? 'bulan' : 'tanggal';
     try {
       const arr = JSON.parse(this.read('accessRegionals') || '[]');
@@ -82,6 +84,7 @@ const App = {
   },
   setTheme(v) { this.theme = v; this.write('jw_theme', v === 'auto' ? '' : v); this.applyTheme(); },
   setPalette(v) { this.palette = v; this.write('jw_palette', v === 'mint' ? '' : v); this.applyTheme(); },
+  setUserName(v) { this.userName = String(v || '').trim().slice(0, CONFIG.LIMITS.name); this.write('jw_name', this.userName); this.renderTop(); },
 
   /* ---------- data ---------- */
   async load(silent) {
@@ -90,11 +93,13 @@ const App = {
       const res = await Sheets.fetchAll();
       this.stores = Array.isArray(res.toko) ? res.toko : [];
       this.acts = Array.isArray(res.kegiatan) ? res.kegiatan : [];
+      if (Array.isArray(res.kontak)) this.contacts = res.kontak;
       this.lastSync = Date.now();
       this.connected = true;
       this.buildStores();
       Sheets.saveList(Sheets.CACHE_KEY_ACTIVITY, this.acts);
       Sheets.saveList(Sheets.CACHE_KEY_STORE, this.stores);
+      Sheets.saveList(Sheets.CACHE_KEY_KONTAK, this.contacts);
       this.render();
       this.hideSplash();
       return true;
@@ -124,16 +129,11 @@ const App = {
   normRecord(a) {
     const s = String(a.status == null ? '' : a.status).trim();
     const status = CONFIG.STATUSES.find(x => x.toLowerCase() === s.toLowerCase()) || s || 'Terjadwal';
+    const str = (v) => String(v == null ? '' : v).trim();
     return {
-      id: String(a.id || ''),
-      date: String(a.date || ''),
-      name: String(a.name || '').trim(),
-      store: this.canonStore(a.store),
-      type: String(a.type || '').trim(),
-      k1: String(a.k1 == null ? '' : a.k1).trim(),
-      k2: String(a.k2 == null ? '' : a.k2).trim(),
-      status,
-      updatedAt: String(a.updatedAt || '')
+      id: str(a.id), date: str(a.date), name: str(a.name), store: this.canonStore(a.store), type: str(a.type),
+      k1: str(a.k1), k2: str(a.k2), picName: str(a.picName), picPhone: str(a.picPhone), note: str(a.note),
+      status, updatedAt: str(a.updatedAt)
     };
   },
   storeNorm(s) {
@@ -172,13 +172,24 @@ const App = {
   },
   visible() { return this.acts.filter(a => this.matches(a)); },
   filterCount() { return ['regional', 'area', 'store', 'type', 'pic'].filter(k => this.filter[k]).length; },
+  contactOf(name) {
+    const n = String(name || '').trim().toLowerCase();
+    return n ? this.contacts.find(c => String(c.name).toLowerCase() === n) : null;
+  },
+  rememberContact(name, phone, store) {
+    if (!name) return;
+    const c = this.contactOf(name);
+    if (c) { if (phone) c.phone = phone; if (store) c.store = store; }
+    else this.contacts.push({ name, phone: phone || '', store: store || '' });
+    Sheets.saveList(Sheets.CACHE_KEY_KONTAK, this.contacts);
+  },
 
   today() { return fmt(new Date()); },
   type(key) { return CONFIG.ACTIVITY_TYPES.find(t => t.key === key) || null; },
+  fieldsOf(key) { const t = this.type(key); return t ? t.fields : CONFIG.GENERIC_FIELDS; },
   hue(key) { const t = this.type(key); return `--hue:var(${t ? t.colorVar : '--ink-3'})`; },
   typeOrder(key) { const i = CONFIG.ACTIVITY_TYPES.findIndex(t => t.key === key); return i < 0 ? 99 : i; },
-  titleOf(a) { const t = this.type(a.type); return a.k1 || (t ? t.name : a.type) || 'Kegiatan'; },
-  numberField(type) { return type ? type.fields.find(f => f.type === 'number') : null; },
+  titleOf(a) { const t = this.type(a.type); return a.k1 || (t ? t.desc : a.type) || 'Kegiatan'; },
   byDate(a, b) { return a.date.localeCompare(b.date) || App.typeOrder(a.type) - App.typeOrder(b.type) || App.titleOf(a).localeCompare(App.titleOf(b)); },
   dShort(d) { const x = pd(d); return CONFIG.DAYS_SHORT[x.getDay()] + ', ' + x.getDate() + ' ' + CONFIG.MONTHS_SHORT[x.getMonth()]; },
   dFull(d) { const x = pd(d); return CONFIG.DAYS[x.getDay()] + ', ' + x.getDate() + ' ' + CONFIG.MONTHS[x.getMonth()] + ' ' + x.getFullYear(); },
@@ -186,6 +197,14 @@ const App = {
     const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
     if (!m) return s || '—';
     return Number(m[3]) + ' ' + CONFIG.MONTHS_SHORT[Number(m[2]) - 1] + ' ' + m[1] + ', ' + m[4] + '.' + m[5];
+  },
+  waNumber(p) {
+    let d = String(p || '').replace(/[^\d+]/g, '');
+    if (d.startsWith('+')) d = d.slice(1);
+    d = d.replace(/\D/g, '');
+    if (d.startsWith('0')) d = '62' + d.slice(1);
+    else if (d.startsWith('8')) d = '62' + d;
+    return d;
   },
   needList() {
     const t = this.today();
@@ -209,6 +228,7 @@ const App = {
     this.renderStats();
     this.renderCal();
     this.renderSide();
+    if (this.searchOpen) this.renderSearch();
     if (this.overlay === 'drawer' && this.drawerKind !== 'filter') this.renderDrawer();
   },
   renderTop() {
@@ -231,54 +251,107 @@ const App = {
   renderLegend() {
     $('#legend').innerHTML = CONFIG.ACTIVITY_TYPES.map(t => `<span style="${this.hue(t.key)}"><i></i>${esc(t.key)}</span>`).join('');
   },
-  calCells() {
-    const cells = [];
-    let title;
-    if (this.calMode === 'minggu') {
-      const ws = weekStart(this.sel);
-      for (let i = 0; i < 7; i++) cells.push(addDays(ws, i));
-      const a = pd(cells[0]), b = pd(cells[6]);
-      title = a.getMonth() === b.getMonth()
-        ? a.getDate() + '–' + b.getDate() + ' ' + CONFIG.MONTHS_SHORT[a.getMonth()] + ' ' + a.getFullYear()
-        : a.getDate() + ' ' + CONFIG.MONTHS_SHORT[a.getMonth()] + ' – ' + b.getDate() + ' ' + CONFIG.MONTHS_SHORT[b.getMonth()] + ' ' + b.getFullYear();
-    } else {
-      const off = (new Date(this.y, this.m, 1).getDay() + 6) % 7;
-      const dim = new Date(this.y, this.m + 1, 0).getDate();
-      for (let i = 0; i < off; i++) cells.push(null);
-      for (let d = 1; d <= dim; d++) cells.push(fmt(new Date(this.y, this.m, d)));
-      title = CONFIG.MONTHS[this.m] + ' ' + this.y;
+
+  /* ---------- calendar ---------- */
+  calRows() {
+    const off = (new Date(this.y, this.m, 1).getDay() + 6) % 7;
+    const dim = new Date(this.y, this.m + 1, 0).getDate();
+    const n = Math.ceil((off + dim) / 7);
+    const rows = [];
+    for (let r = 0; r < n; r++) {
+      const row = [];
+      for (let c = 0; c < 7; c++) row.push(fmt(new Date(this.y, this.m, 1 - off + r * 7 + c)));
+      rows.push(row);
     }
-    return { cells, title };
+    return rows;
+  },
+  weekNo(ds) {
+    const x = pd(ds);
+    const off = (new Date(x.getFullYear(), x.getMonth(), 1).getDay() + 6) % 7;
+    return Math.floor((x.getDate() - 1 + off) / 7) + 1;
+  },
+  // Maksimal 3 tanda per tanggal; jenis berbeda didahulukan. Jika lebih dari 3, tanda ketiga jadi +N.
+  calSlots(items) {
+    const sorted = items.slice().sort((a, b) =>
+      (a.status === 'Batal') - (b.status === 'Batal') || this.typeOrder(a.type) - this.typeOrder(b.type) || this.titleOf(a).localeCompare(this.titleOf(b)));
+    const firsts = [], rest = [], seen = new Set();
+    sorted.forEach(a => { if (seen.has(a.type)) rest.push(a); else { seen.add(a.type); firsts.push(a); } });
+    const order = firsts.concat(rest);
+    return order.length <= 3 ? { shown: order, more: 0 } : { shown: order.slice(0, 2), more: order.length - 2 };
   },
   renderCal() {
     const t = this.today();
-    const { cells, title } = this.calCells();
-    $('#calTitle').textContent = title;
-    const week = this.calMode === 'minggu';
-    $('#calDays').classList.toggle('week', week);
+    const rows = this.calRows();
     const byDay = {};
     this.visible().forEach(a => { (byDay[a.date] = byDay[a.date] || []).push(a); });
-    const max = week ? 9 : 2;
-    $('#calDays').innerHTML = cells.map(ds => {
-      if (!ds) return '<span class="day blank"></span>';
-      const items = (byDay[ds] || []).sort((a, b) => this.byDate(a, b));
+    const cur = rows.findIndex(r => r.includes(this.sel));
+    $('#calDays').innerHTML = rows.map((r, i) => `<div class="wrow${i === cur ? ' cur' : ''}">` + r.map(ds => {
+      const x = pd(ds);
+      const items = byDay[ds] || [];
+      const { shown, more } = this.calSlots(items);
       const cls = ['day'];
-      if (ds === t) cls.push('today'); else if (ds < t) cls.push('past');
+      if (x.getMonth() !== this.m) cls.push('out');
+      if (ds === t) cls.push('today');
       if (ds === this.sel) cls.push('sel');
-      const dots = items.slice(0, 3).map(a => `<i class="${a.status === 'Batal' ? 'off' : ''}" style="${this.hue(a.type)}"></i>`).join('');
-      const evs = items.slice(0, max).map(a =>
-        `<span class="ev hue${a.status === 'Batal' ? ' off' : ''}" style="${this.hue(a.type)}">${a.status === 'Selesai' ? '✓ ' : ''}${esc(this.titleOf(a))}</span>`).join('');
-      const more = items.length > max ? `<span class="more">+${items.length - max}</span>` : '';
+      const dots = shown.map(a => `<i class="${a.status === 'Batal' ? 'off' : ''}" style="${this.hue(a.type)}"></i>`).join('') + (more ? `<b>+${more}</b>` : '');
+      const evs = shown.map(a => `<span class="ev hue${a.status === 'Batal' ? ' off' : ''}" style="${this.hue(a.type)}">${a.status === 'Selesai' ? '✓ ' : ''}${esc(this.titleOf(a))}</span>`).join('')
+        + (more ? `<span class="ev more">+${more} lagi</span>` : '');
       const label = this.dFull(ds) + (items.length ? ', ' + items.length + ' kegiatan' : '');
       return `<button class="${cls.join(' ')}" data-d="${ds}" aria-label="${label}" aria-pressed="${ds === this.sel}">
-        <span class="day-top"><span class="n">${pd(ds).getDate()}</span>${more}</span>
-        <span class="dots">${dots}</span><span class="evs">${evs}</span></button>`;
-    }).join('');
-    document.querySelectorAll('#calMode [data-mode]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === this.calMode)));
-    const tp = pd(t);
-    const viewingToday = week ? weekStart(this.sel) === weekStart(t) : (this.y === tp.getFullYear() && this.m === tp.getMonth());
-    $('#calToday').hidden = viewingToday && this.sel === t;
+        <span class="n">${x.getDate()}</span><span class="dots">${dots}</span><span class="evs">${evs}</span></button>`;
+    }).join('') + '</div>').join('');
+    $('#cal').classList.toggle('compact', this.compact);
+    this.renderCalHead();
   },
+  renderCalHead() {
+    const month = CONFIG.MONTHS[this.m] + ' ' + this.y;
+    $('#calTitle').innerHTML = this.compact ? `Minggu ${this.weekNo(this.sel)}<small>${esc(month)}</small>` : esc(month);
+    $('#calPrev').setAttribute('aria-label', this.compact ? 'Minggu sebelumnya' : 'Bulan sebelumnya');
+    $('#calNext').setAttribute('aria-label', this.compact ? 'Minggu berikutnya' : 'Bulan berikutnya');
+    const t = this.today(), tp = pd(t);
+    $('#calToday').hidden = this.sel === t && this.y === tp.getFullYear() && this.m === tp.getMonth();
+  },
+  setMonthOf(ds) { const x = pd(ds); this.y = x.getFullYear(); this.m = x.getMonth(); },
+  shiftCal(dir) {
+    if (this.compact) {
+      this.sel = addDays(this.sel, dir * 7);
+      this.setMonthOf(this.sel);
+    } else {
+      const x = new Date(this.y, this.m + dir, 1);
+      this.y = x.getFullYear();
+      this.m = x.getMonth();
+    }
+    this.renderCal();
+    this.renderSide();
+  },
+  // Kalender menempel di atas; saat halaman digulir ke bawah, kalender menyusut jadi satu minggu.
+  updateCompact() {
+    let c = this.compact;
+    if (window.innerWidth >= 1100) c = false;
+    else {
+      const top = $('#calSentinel').getBoundingClientRect().top;
+      const stick = parseFloat(getComputedStyle($('#cal')).top) || 8;
+      if (!c && top < stick - 4) c = true;
+      else if (c && top > stick + 4) c = false;
+    }
+    if (c === this.compact) return;
+    if (c) {
+      const sp = pd(this.sel);
+      if (sp.getFullYear() !== this.y || sp.getMonth() !== this.m) {
+        const t = this.today(), tp = pd(t);
+        this.sel = tp.getFullYear() === this.y && tp.getMonth() === this.m ? t : fmt(new Date(this.y, this.m, 1));
+        this.renderCal();
+        this.renderSide();
+      }
+    }
+    this.compact = c;
+    requestAnimationFrame(() => {
+      $('#cal').classList.toggle('compact', this.compact);
+      this.renderCalHead();
+    });
+  },
+
+  /* ---------- side panel ---------- */
   card(a) {
     const t = this.today();
     const x = pd(a.date);
@@ -287,18 +360,17 @@ const App = {
     else if (a.status === 'Batal') pill = `<span class="pill hue h-bad">Batal</span>`;
     else if (a.date < t && a.status === 'Terjadwal') pill = `<span class="pill hue h-warn">Perlu update</span>`;
     else if (a.status !== 'Terjadwal') pill = `<span class="pill hue h-primary">${esc(a.status)}</span>`;
-    const n = a.k2 && this.numberField(this.type(a.type)) ? a.k2 + ' peserta' : '';
-    const meta = [this.short(a.store), a.name, n].filter(Boolean).join(' · ');
     return `<button class="act${a.status === 'Batal' ? ' is-batal' : ''}" style="${this.hue(a.type)}" data-open="${esc(a.id)}">
       <span class="date-b hue"><b>${x.getDate()}</b><small>${CONFIG.DAYS_SHORT[x.getDay()]}</small></span>
       <span class="act-body">
         <span class="act-top"><span class="chip hue">${esc(a.type || '—')}</span>${pill}</span>
         <span class="act-title">${esc(this.titleOf(a))}</span>
-        <span class="act-meta">${esc(meta)}</span>
+        <span class="act-meta">${esc(this.short(a.store))}</span>
       </span>${ic('chev-r')}</button>`;
   },
   needsCard() {
     const list = this.needList();
+    if (!list.length) return '';
     const shown = this.nuAll ? list : list.slice(0, 5);
     const rows = shown.map(a => `
       <div class="nu-row" style="${this.hue(a.type)}" data-id="${esc(a.id)}">
@@ -309,28 +381,18 @@ const App = {
       </div>`).join('');
     const more = list.length > shown.length
       ? `<div class="nu-more">dan ${list.length - shown.length} lainnya · <button class="link" data-act="nu-all">Tampilkan semua</button></div>` : '';
-    return `<section class="card nu${list.length ? '' : ' calm'}" aria-label="Perlu update">
-      <div class="sec-head"><span class="sec-title">Perlu update</span>${list.length ? `<span class="count">${list.length}</span>` : ''}</div>
-      ${list.length ? '<p class="sec-sub">Sudah lewat tapi masih terjadwal. Sudah terlaksana?</p>' : ''}
-      <div class="nu-list">${list.length ? rows + more : `<div class="nu-done">${ic('check')}Semua kegiatan sudah ter-update.</div>`}</div>
+    return `<section class="card nu" aria-label="Perlu update">
+      <div class="sec-head"><span class="sec-title">Perlu update</span><span class="count">${list.length}</span></div>
+      <p class="sec-sub">Sudah lewat tapi masih terjadwal. Sudah terlaksana?</p>
+      <div class="nu-list">${rows}${more}</div>
     </section>`;
   },
   renderSide() {
-    const side = $('#side');
-    const q = this.q.trim().toLowerCase();
-    if (q) {
-      const hits = this.visible().filter(a => [this.titleOf(a), a.store, a.name, a.type, a.k1].join(' ').toLowerCase().includes(q))
-        .sort((a, b) => this.byDate(b, a));
-      side.innerHTML = `<section class="agenda full" aria-label="Hasil pencarian">
-        <div class="sec-head"><span class="sec-title">Hasil pencarian</span><span class="sec-date">${hits.length} kegiatan</span></div>
-        ${hits.length ? hits.slice(0, 60).map(a => this.card(a)).join('') : `<div class="empty"><span class="blob">${ic('search')}</span><p>Tidak ada kegiatan yang cocok dengan “${esc(this.q.trim())}”.</p></div>`}
-      </section>`;
-      return;
-    }
     const t = this.today();
     const seg = `<div class="seg small" role="group" aria-label="Isi daftar">
       <button data-amode="tanggal" aria-pressed="${this.agendaMode === 'tanggal'}">Tanggal</button>
       <button data-amode="bulan" aria-pressed="${this.agendaMode === 'bulan'}">Sebulan</button></div>`;
+    const empty = (msg) => `<div class="empty"><span class="blob">${ic('cal')}</span><p>${msg}</p></div>`;
     let body;
     if (this.agendaMode === 'bulan') {
       const key = this.y + '-' + pad2(this.m + 1);
@@ -338,7 +400,7 @@ const App = {
       const up = rows.filter(a => a.date >= t).sort((a, b) => this.byDate(a, b));
       const past = rows.filter(a => a.date < t).sort((a, b) => this.byDate(b, a));
       body = `<div class="sec-head"><span class="sec-title">${CONFIG.MONTHS[this.m]} ${this.y}</span><span class="sec-note">${rows.length} kegiatan</span>${seg}</div>`;
-      if (!rows.length) body += `<div class="empty"><span class="blob">${ic('cal')}</span><p>Belum ada kegiatan di bulan ini.</p><button class="link" data-act="add-day">Tambah kegiatan</button></div>`;
+      if (!rows.length) body += empty('Belum ada kegiatan di bulan ini.');
       if (up.length) body += `<div class="list-group"><span>Akan dilaksanakan</span><span>${up.length}</span></div>` + up.map(a => this.card(a)).join('');
       if (past.length) body += `<div class="list-group"><span>Sudah dilaksanakan</span><span>${past.length}</span></div>` + past.map(a => this.card(a)).join('');
     } else {
@@ -347,31 +409,74 @@ const App = {
       const head = this.sel === t ? 'Hari ini' : this.sel === tmr ? 'Besok' : this.sel === addDays(t, -1) ? 'Kemarin' : this.dShort(this.sel);
       const note = [t, tmr, addDays(t, -1)].includes(this.sel) ? this.dShort(this.sel) : '';
       body = `<div class="sec-head"><span class="sec-title">${head}</span>${note ? `<span class="sec-note">${note}</span>` : ''}${seg}</div>`;
-      body += day.length ? day.map(a => this.card(a)).join('') : `
-        <div class="empty"><span class="blob">${ic('cal')}</span><p>Belum ada kegiatan di tanggal ini.</p>
-        <button class="link" data-act="add-day">Tambah di tanggal ini</button></div>`;
+      body += day.length ? day.map(a => this.card(a)).join('') : empty('Belum ada kegiatan di tanggal ini.');
       const next = this.visible().filter(a => a.date > this.sel && a.status !== 'Batal').sort((a, b) => this.byDate(a, b)).slice(0, 4);
       if (next.length) body += `<div class="sec-head" style="margin-top:6px"><span class="sec-title">Akan datang</span></div>` + next.map(a => this.card(a)).join('');
     }
-    side.innerHTML = this.needsCard() + `<section class="agenda" id="agenda" aria-label="Daftar kegiatan">${body}</section>`;
+    $('#side').innerHTML = this.needsCard() + `<section class="agenda" id="agenda" aria-label="Daftar kegiatan">${body}</section>`;
+  },
+
+  /* ---------- search (melayang di bawah tombol cari) ---------- */
+  openSearch() {
+    this.searchOpen = true;
+    this.showEl($('#searchPop'));
+    $('#btnSearch').setAttribute('aria-expanded', 'true');
+    this.renderSearch();
+    setTimeout(() => $('#q').focus({ preventScroll: true }), 30);
+  },
+  closeSearch() {
+    if (!this.searchOpen) return;
+    this.searchOpen = false;
+    this.hideEl($('#searchPop'), () => { $('#q').value = ''; });
+    $('#btnSearch').setAttribute('aria-expanded', 'false');
+  },
+  renderSearch() {
+    const raw = $('#q').value.trim();
+    const q = raw.toLowerCase();
+    const box = $('#searchResults');
+    if (!q) { box.innerHTML = '<div class="search-note">Ketik nama kegiatan, toko, atau PIC.</div>'; return; }
+    const t = this.today();
+    const hits = this.visible().filter(a => [this.titleOf(a), a.store, a.name, a.type, a.picName, a.note, a.k2].join(' ').toLowerCase().includes(q));
+    const up = hits.filter(a => a.date >= t).sort((a, b) => this.byDate(a, b));
+    const past = hits.filter(a => a.date < t).sort((a, b) => this.byDate(b, a));
+    box.innerHTML = hits.length
+      ? up.concat(past).slice(0, 50).map(a => this.card(a)).join('')
+      : `<div class="search-note">Tidak ada kegiatan yang cocok dengan “${esc(raw)}”.</div>`;
+  },
+
+  /* ---------- show / hide with transitions ---------- */
+  reduceMotion() { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; },
+  showEl(el) {
+    clearTimeout(el._hideT);
+    el.classList.remove('out');
+    if (el.hidden) {
+      el.hidden = false;
+      el.classList.remove('anim');
+      void el.offsetWidth;
+      el.classList.add('anim');
+    }
+  },
+  hideEl(el, done) {
+    if (el.hidden) { if (done) done(); return; }
+    if (this.reduceMotion()) { el.hidden = true; if (done) done(); return; }
+    el.classList.remove('anim');
+    el.classList.add('out');
+    clearTimeout(el._hideT);
+    el._hideT = setTimeout(() => { el.hidden = true; el.classList.remove('out'); if (done) done(); }, 220);
   },
 
   /* ---------- overlays ---------- */
   showOverlay(which) {
     const wasOpen = !!this.overlay;
     if (!wasOpen) this.lastFocus = document.activeElement;
-    $('#drawer').hidden = which !== 'drawer';
-    $('#dialog').hidden = which !== 'dialog';
-    $('#scrim').hidden = false;
+    if (this.searchOpen) this.closeSearch();
+    const el = which === 'drawer' ? $('#drawer') : $('#dialog');
+    const other = which === 'drawer' ? $('#dialog') : $('#drawer');
+    this.hideEl(other);
+    if (this.overlay !== which) { el.scrollTop = 0; $('#drawerBody').scrollTop = 0; }
+    this.showEl(el);
+    this.showEl($('#scrim'));
     document.body.classList.add('locked');
-    if (this.overlay !== which) {
-      const el = which === 'drawer' ? $('#drawer') : $('#dialog');
-      el.classList.remove('anim');
-      void el.offsetWidth;
-      el.classList.add('anim');
-      el.scrollTop = 0;
-      if (which === 'drawer') $('#drawerBody').scrollTop = 0;
-    }
     if (!wasOpen) {
       try { history.pushState({ jwOverlay: true }, ''); this.pushed = true; } catch { this.pushed = false; }
     }
@@ -379,9 +484,9 @@ const App = {
   },
   closeOverlay(fromPop) {
     if (!this.overlay) return;
-    $('#drawer').hidden = true;
-    $('#dialog').hidden = true;
-    $('#scrim').hidden = true;
+    this.hideEl($('#drawer'));
+    this.hideEl($('#dialog'));
+    this.hideEl($('#scrim'));
     document.body.classList.remove('locked');
     this.overlay = null;
     this.drawerKind = null;
@@ -420,24 +525,30 @@ const App = {
   openDetail(id) { this.detailId = id; this.openDrawer('detail'); },
   detailHTML(a) {
     const t = this.type(a.type);
-    const nf = this.numberField(t);
-    const rows = [
-      ['pin', 'Toko', a.store || '—'],
-      ['user', 'Dicatat oleh', a.name || '—'],
-      nf ? ['people', nf.label, a.k2 ? a.k2 + ' orang' : 'Belum diisi'] : null,
-      !t && a.k2 ? ['tag', 'Keterangan 2', a.k2] : null,
-      ['clock', 'Terakhir diubah', a.updatedAt ? this.stamp(a.updatedAt) : '—']
-    ].filter(Boolean);
+    const rows = [['pin', 'Toko', esc(a.store || '—')]];
+    this.fieldsOf(a.type).forEach(f => {
+      if (f.slot === 'k1') return;
+      const v = a[f.slot];
+      if (f.type === 'number') { rows.push([f.icon || 'people', f.label, v ? esc(v) + ' orang' : '—']); return; }
+      if (!v) return;
+      if (f.type === 'tel') {
+        rows.push([f.icon || 'phone', f.label, `<a class="wa-link" href="https://wa.me/${esc(this.waNumber(v))}" target="_blank" rel="noopener">${esc(v)}${ic('chat')}</a>`]);
+        return;
+      }
+      rows.push([f.icon || 'tag', f.label, esc(v), f.type === 'textarea']);
+    });
+    rows.push(['pencil', 'Dicatat oleh', esc(a.name || '—')]);
+    rows.push(['clock', 'Terakhir diubah', esc(a.updatedAt ? this.stamp(a.updatedAt) : '—')]);
     const dis = this.busy ? ' disabled' : '';
     return `
       <section class="hero" style="${this.hue(a.type)}">
         <span class="ib">${ic(t ? t.icon : 'cal')}</span>
-        <span class="chip">${esc(a.type || 'Kegiatan')}${t ? ' · ' + esc(t.name) : ''}</span>
+        <span class="chip">${esc(a.type || 'Kegiatan')}${t ? ' · ' + esc(t.desc) : ''}</span>
         <h3>${esc(this.titleOf(a))}</h3>
         <div class="when">${this.dFull(a.date)}</div>
       </section>
-      <section class="card info">${rows.map(([i, k, v]) => `
-        <div class="info-row"><span class="ii">${ic(i)}</span><div><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div></div>`).join('')}
+      <section class="card info">${rows.map(([i, k, v, multi]) => `
+        <div class="info-row"><span class="ii">${ic(i)}</span><div><div class="k">${esc(k)}</div><div class="v${multi ? ' multi' : ''}">${v}</div></div></div>`).join('')}
       </section>
       <div class="field">
         <span class="label" style="padding-left:6px">Status</span>
@@ -447,31 +558,30 @@ const App = {
         </div>
       </div>
       <div class="row2">
-        <a class="btn-soft wa" href="${esc(this.waLink(a))}" target="_blank" rel="noopener">${ic('chat')}Bagikan</a>
+        <a class="btn-soft wa" href="${esc(this.shareLink(a))}" target="_blank" rel="noopener">${ic('chat')}Bagikan</a>
         <button class="btn-soft" data-act="edit"${dis}>${ic('pencil')}Ubah</button>
       </div>
       ${this.confirmDel ? `
         <div class="confirm" role="alertdialog" aria-label="Konfirmasi hapus">
-          <p>Hapus “${esc(this.titleOf(a))}”?<small>Kegiatan ini juga dihapus dari spreadsheet dan tidak bisa dikembalikan.</small></p>
+          <p>Hapus “${esc(this.titleOf(a))}”?<small>Kegiatan ini dipindah ke sheet Sampah di spreadsheet.</small></p>
           <div class="row2"><button class="btn-plain" data-act="cancel-del"${dis}>Batal</button><button class="btn-bad" data-act="do-del"${dis}>${this.busy ? 'Menghapus...' : 'Hapus'}</button></div>
         </div>` : `<button class="btn-text" data-act="del"${dis}>${ic('trash')}Hapus kegiatan</button>`}`;
   },
-  waLink(a) {
+  shareLink(a) {
     const t = this.type(a.type);
-    const nf = this.numberField(t);
-    const lines = [
-      '*Agenda Jadwalin*',
-      (a.type ? a.type + ' · ' : '') + this.titleOf(a),
-      this.dFull(a.date),
-      a.store,
-      a.name ? 'PIC: ' + a.name : '',
-      nf && a.k2 ? 'Peserta: ' + a.k2 : '',
-      'Status: ' + a.status
-    ].filter(Boolean);
-    return 'https://wa.me/?text=' + encodeURIComponent(lines.join('\n'));
+    const lines = ['*Agenda Jadwalin*', (a.type ? a.type + ' · ' : '') + this.titleOf(a), this.dFull(a.date), a.store];
+    this.fieldsOf(a.type).forEach(f => {
+      if (['k1', 'picName', 'picPhone', 'note'].includes(f.slot) || !a[f.slot]) return;
+      lines.push(f.label + ': ' + a[f.slot]);
+    });
+    if (a.picName || a.picPhone) lines.push('PIC: ' + [a.picName, a.picPhone].filter(Boolean).join(' · '));
+    if (a.note && (!t || t.fields.some(f => f.slot === 'note'))) lines.push('Keterangan: ' + a.note);
+    lines.push('Status: ' + a.status);
+    return 'https://wa.me/?text=' + encodeURIComponent(lines.filter(Boolean).join('\n'));
   },
   rowOf(a) {
-    const row = { date: a.date, name: a.name, store: a.store, type: a.type, k1: a.k1, k2: a.k2, status: a.status };
+    const row = { date: a.date, name: a.name, store: a.store, type: a.type, status: a.status };
+    SLOTS.forEach(k => { row[k] = a[k] || ''; });
     if (a.id) row.id = a.id;
     return row;
   },
@@ -513,7 +623,7 @@ const App = {
     this.busy = true;
     this.renderDrawer();
     try {
-      await Sheets.deleteActivity(a.id);
+      await Sheets.deleteActivity(a.id, this.userName);
       this.acts = this.acts.filter(x => x.id !== a.id);
       Sheets.saveList(Sheets.CACHE_KEY_ACTIVITY, this.acts);
       this.busy = false;
@@ -543,114 +653,125 @@ const App = {
   openForm(a, date) {
     const t = this.today();
     if (a) {
-      this.draft = { editId: a.id, type: a.type, date: a.date, store: a.store, k1: a.k1, k2: a.k2, name: a.name, status: a.status, askName: false };
+      this.draft = { editId: a.id, type: a.type, date: a.date, store: a.store, name: a.name || this.userName, status: a.status };
+      SLOTS.forEach(k => { this.draft[k] = a[k] || ''; });
     } else {
       const d = date || (this.sel >= t ? this.sel : t);
       const store = this.filter.store || (this.storeList().includes(this.lastStore) ? this.lastStore : '');
-      this.draft = { editId: null, type: this.filter.type || CONFIG.ACTIVITY_TYPES[0].key, date: d, store, k1: '', k2: '', name: this.userName, status: 'Terjadwal', askName: !this.userName };
+      this.draft = { editId: null, type: this.filter.type || CONFIG.ACTIVITY_TYPES[0].key, date: d, store, name: this.userName, status: 'Terjadwal' };
+      SLOTS.forEach(k => { this.draft[k] = ''; });
     }
+    this.draft.step = this.draft.name ? 'form' : 'name';
     this.formError = '';
     this.showOverlay('dialog');
     this.renderForm(false);
     if (window.matchMedia('(pointer: fine)').matches) {
-      setTimeout(() => { const el = $('#dialog').querySelector(this.draft && this.draft.askName ? '#fName' : '#fK1'); if (el) el.focus({ preventScroll: true }); }, 80);
+      setTimeout(() => { const el = $('#dialog').querySelector(this.draft && this.draft.step === 'name' ? '#fName' : '#f_k1'); if (el) el.focus({ preventScroll: true }); }, 80);
     }
   },
   keepDraft() {
     const d = this.draft;
-    if (!d) return;
-    const g = (id) => { const el = document.getElementById(id); return el ? el.value : null; };
-    const name = g('fName'); if (name != null) d.name = name;
-    const k1 = g('fK1'); if (k1 != null) d.k1 = k1;
-    const k2 = g('fK2'); if (k2 != null) d.k2 = k2;
-    const st = g('fStoreText'); if (st != null) d.store = st;
+    if (!d || d.step !== 'form') return;
+    SLOTS.forEach(k => { const el = document.getElementById('f_' + k); if (el) d[k] = el.value; });
+    const date = document.getElementById('fDate'); if (date) d.date = date.value;
+    const st = document.getElementById('fStoreText'); if (st) d.store = st.value;
+  },
+  fieldHTML(f, d) {
+    const id = 'f_' + f.slot;
+    const label = `<label class="label" for="${id}">${esc(f.label)}</label>`;
+    const val = esc(d[f.slot]);
+    if (f.type === 'number') {
+      return `<div class="field">${label}<div class="stepper">
+          <button type="button" data-step="-1" aria-label="Kurangi">${ic('minus')}</button>
+          <input id="${id}" type="number" inputmode="numeric" min="0" max="99999" value="${val}">
+          <button type="button" data-step="1" aria-label="Tambah">${ic('plus')}</button>
+        </div></div>`;
+    }
+    if (f.type === 'textarea') {
+      return `<div class="field wide-field">${label}<textarea class="input" id="${id}" rows="3" maxlength="${f.max || 300}">${val}</textarea></div>`;
+    }
+    if (f.type === 'tel') {
+      return `<div class="field">${label}<input class="input" id="${id}" type="tel" inputmode="tel" autocomplete="off" maxlength="${f.max || 30}" value="${val}"></div>`;
+    }
+    const list = f.slot === 'picName' ? ' list="picList"' : '';
+    return `<div class="field">${label}<input class="input" id="${id}" maxlength="${f.max || 140}" autocomplete="off"${list} value="${val}"></div>`;
   },
   renderForm(popType) {
     const d = this.draft;
+    if (d.step === 'name') {
+      $('#dialogTitle').textContent = 'Kenalan dulu';
+      $('#dialogBody').innerHTML = `
+        <div class="name-step">
+          <span class="blob">${ic('user')}</span>
+          <p>Isi nama kamu dulu. Nama ini dicatat di setiap kegiatan yang kamu tambahkan.</p>
+          <div class="field"><label class="label" for="fName">Nama kamu</label>
+            <input class="input" id="fName" maxlength="${CONFIG.LIMITS.name}" autocomplete="name" value=""></div>
+          ${this.formError ? `<div class="form-error" role="alert">${esc(this.formError)}</div>` : ''}
+          <button type="submit" class="btn-big" id="fSave">Lanjut</button>
+        </div>`;
+      return;
+    }
     const edit = !!d.editId;
-    const t = this.today(), tmr = addDays(t, 1);
-    const type = this.type(d.type);
-    const fields = type ? type.fields : [
-      { slot: 'k1', label: 'Keterangan 1', max: 140 },
-      { slot: 'k2', label: 'Keterangan 2', max: 140 }
-    ];
-    const other = d.date !== t && d.date !== tmr;
     const types = CONFIG.ACTIVITY_TYPES.slice();
-    if (d.type && !type) types.push({ key: d.type, name: 'Lainnya', icon: 'tag' });
+    if (d.type && !this.type(d.type)) types.push({ key: d.type, desc: 'Jenis lain', icon: 'tag' });
     const tiles = types.map(x => `
       <button type="button" class="tile${popType && x.key === d.type ? ' pop' : ''}" style="${this.hue(x.key)}" data-type="${esc(x.key)}" aria-pressed="${x.key === d.type}">
-        <span class="ib hue">${ic(x.icon)}</span><span class="tile-text"><b>${esc(x.key)}</b><small>${esc(x.name)}</small></span>
+        <span class="ib hue">${ic(x.icon)}</span><span class="tile-text"><b>${esc(x.key)}</b><small>${esc(x.desc)}</small></span>
       </button>`).join('');
     const stores = this.storeList();
     if (d.store && !stores.includes(d.store)) stores.unshift(d.store);
     const storeField = stores.length
       ? this.ddHTML('fStore', stores.map(s => ({ v: s, l: this.short(s) })), d.store, 'Pilih toko', 'pin')
-      : `<input class="input" id="fStoreText" maxlength="120" placeholder="Nama toko" value="${esc(d.store)}" autocomplete="off">`;
-    const fieldHTML = fields.map(f => {
-      const id = f.slot === 'k1' ? 'fK1' : 'fK2';
-      if (f.type === 'number') {
-        return `<div class="field"><label class="label" for="${id}">${esc(f.label)} <span class="opt">· boleh diisi nanti</span></label>
-          <div class="stepper">
-            <button type="button" data-step="-1" aria-label="Kurangi">${ic('minus')}</button>
-            <input id="${id}" type="number" inputmode="numeric" min="0" max="99999" placeholder="0" value="${esc(d[f.slot])}">
-            <button type="button" data-step="1" aria-label="Tambah">${ic('plus')}</button>
-          </div></div>`;
-      }
-      return `<div class="field"><label class="label" for="${id}">${esc(f.label)}${f.required ? '' : ' <span class="opt">· opsional</span>'}</label>
-        <input class="input" id="${id}" maxlength="${f.max || 140}" autocomplete="off" placeholder="${esc(f.placeholder || '')}" value="${esc(d[f.slot])}"></div>`;
-    }).join('');
-    const nameField = d.askName ? `
-      <div class="field wide-field"><label class="label" for="fName">Nama kamu</label>
-        <input class="input" id="fName" maxlength="${CONFIG.LIMITS.name}" autocomplete="name" placeholder="contoh: Rina" value="${esc(d.name)}">
-        <span class="opt" style="font-size:12px">Disimpan untuk kegiatan berikutnya.</span></div>` : '';
-    let by = '';
-    if (edit) by = `${ic('user')}Dicatat oleh <b>${esc(d.name || '—')}</b>`;
-    else if (!d.askName) by = `${ic('user')}Dicatat sebagai <b>${esc(d.name)}</b> · <button type="button" class="link" data-act="ask-name">ganti</button>`;
+      : `<input class="input" id="fStoreText" maxlength="120" value="${esc(d.store)}" autocomplete="off" aria-label="Toko">`;
+    const names = Array.from(new Set(this.contacts.map(c => c.name).filter(Boolean))).sort((a, b) => a.localeCompare(b));
 
     $('#dialogTitle').textContent = edit ? 'Ubah kegiatan' : 'Kegiatan baru';
     $('#dialogBody').innerHTML = `
       <div class="field"><span class="label">Jenis kegiatan</span><div class="tiles">${tiles}</div></div>
       <div class="form-grid">
-        ${nameField}
-        <div class="field"><span class="label">Tanggal</span>
-          <div class="chips">${[['today', 'Hari ini', d.date === t], ['tomorrow', 'Besok', d.date === tmr], ['other', other ? this.dShort(d.date) : 'Tanggal lain', other]]
-            .map(([k, l, on]) => `<button type="button" class="chipbtn" data-date="${k}" aria-pressed="${on}">${l}</button>`).join('')}</div>
-          ${other ? `<input class="input" type="date" id="fDate" value="${esc(d.date)}" aria-label="Tanggal kegiatan">` : ''}
-        </div>
+        <div class="field"><label class="label" for="fDate">Tanggal</label><input class="input" type="date" id="fDate" value="${esc(d.date)}"></div>
         <div class="field"><span class="label" id="fStoreLabel">Toko</span>${storeField}</div>
-        ${fieldHTML}
+        ${this.fieldsOf(d.type).map(f => this.fieldHTML(f, d)).join('')}
       </div>
+      <datalist id="picList">${names.map(n => `<option value="${esc(n)}"></option>`).join('')}</datalist>
       ${this.formError ? `<div class="form-error" role="alert">${esc(this.formError)}</div>` : ''}
-      <div class="form-foot"><div class="by">${by}</div>
-        <button type="submit" class="btn-big" id="fSave">${edit ? 'Simpan perubahan' : 'Simpan kegiatan'}</button></div>`;
+      <div class="form-foot"><button type="submit" class="btn-big" id="fSave">${edit ? 'Simpan perubahan' : 'Simpan kegiatan'}</button></div>`;
+  },
+  submitName() {
+    const v = ($('#fName').value || '').trim();
+    if (!v) { this.formError = 'Isi nama kamu dulu.'; this.renderForm(false); $('#fName').focus(); return; }
+    this.setUserName(v);
+    this.draft.name = this.userName;
+    this.draft.step = 'form';
+    this.formError = '';
+    this.renderForm(false);
+    if (window.matchMedia('(pointer: fine)').matches) { const k1 = $('#f_k1'); if (k1) k1.focus({ preventScroll: true }); }
   },
   async saveForm() {
     this.keepDraft();
     const d = this.draft;
     if (!d) return;
-    const type = this.type(d.type);
     const err = (msg, focus) => {
       this.formError = msg;
       this.renderForm(false);
       const el = focus && document.getElementById(focus);
       if (el) el.focus();
     };
-    d.name = String(d.name || '').trim();
-    d.k1 = String(d.k1 || '').trim();
-    d.k2 = String(d.k2 || '').trim();
-    d.store = String(d.store || '').trim();
-    if (!d.name) { d.askName = true; return err('Isi nama kamu dulu.', 'fName'); }
+    ['store', 'date'].concat(SLOTS).forEach(k => { d[k] = String(d[k] || '').trim(); });
+    d.name = String(d.name || this.userName || '').trim();
+    if (!d.name) { d.step = 'name'; return err('Isi nama kamu dulu.', 'fName'); }
     if (!d.type) return err('Pilih jenis kegiatan.');
-    if (!d.date) return err('Pilih tanggal kegiatan.');
+    if (!d.date) return err('Pilih tanggal kegiatan.', 'fDate');
     if (!d.store) return err('Pilih toko.', 'fStore');
-    if (type) {
-      for (const f of type.fields) {
-        if (f.required && !d[f.slot]) return err(f.label + ' wajib diisi.', f.slot === 'k1' ? 'fK1' : 'fK2');
-      }
+    for (const f of this.fieldsOf(d.type)) {
+      if (f.required && !d[f.slot]) return err(f.label + ' wajib diisi.', 'f_' + f.slot);
     }
+    if (d.picPhone && !PHONE_RE.test(d.picPhone)) return err('Nomor PIC tidak valid.', 'f_picPhone');
     if (this.offline()) return err('Tidak ada koneksi internet. Coba lagi saat online.');
     const edit = !!d.editId;
-    const row = { date: d.date, name: d.name, store: d.store, type: d.type, k1: d.k1, k2: d.k2, status: d.status || 'Terjadwal' };
+    const row = { date: d.date, name: d.name, store: d.store, type: d.type, status: d.status || 'Terjadwal' };
+    const slots = new Set(this.fieldsOf(d.type).map(f => f.slot));
+    SLOTS.forEach(k => { row[k] = slots.has(k) ? d[k] : ''; });
     if (edit) row.id = d.editId;
     const btn = $('#fSave');
     btn.disabled = true;
@@ -658,14 +779,10 @@ const App = {
     try {
       const saved = edit ? await Sheets.updateActivity(row) : await Sheets.addActivity(row);
       const rec = this.replaceAct(saved, { ...row, id: row.id || ('tmp-' + Date.now()) });
-      if (!edit) {
-        if (d.askName || !this.userName) { this.userName = d.name; this.write('jw_name', d.name); }
-        this.lastStore = d.store;
-        this.write('jw_store', d.store);
-      }
+      this.rememberContact(row.picName, row.picPhone, row.store);
+      if (!edit) { this.lastStore = d.store; this.write('jw_store', d.store); }
       this.sel = rec.date;
-      this.y = pd(rec.date).getFullYear();
-      this.m = pd(rec.date).getMonth();
+      this.setMonthOf(rec.date);
       this.agendaMode = 'tanggal';
       this.write('jw_agenda', '');
       this.closeOverlay();
@@ -728,7 +845,7 @@ const App = {
   ddPick(wrap, v) {
     const id = wrap.dataset.dd;
     this.ddClose();
-    if (id === 'fStore' && this.draft) { this.keepDraft(); this.draft.store = v; this.renderForm(false); $('#fStore').focus(); return; }
+    if (id === 'fStore' && this.draft) { this.keepDraft(); this.draft.store = v; this.formError = ''; this.renderForm(false); $('#fStore').focus(); return; }
     if (this.fdraft) {
       if (id === 'flArea') {
         this.fdraft.area = v;
@@ -752,17 +869,17 @@ const App = {
     const areas = Array.from(new Set(this.stores.filter(s => this.storeAllowed(s.store) && (!d.regional || s.regional === d.regional)).map(s => s.area).filter(Boolean))).sort();
     const stores = this.storeList().filter(s => this.inScope(s, d.regional, d.area));
     if (!d.regional && !d.area) Array.from(new Set(this.acts.map(a => a.store).filter(Boolean))).filter(s => this.storeAllowed(s) && !stores.includes(s)).forEach(s => stores.push(s));
-    const pics = Array.from(new Set(this.acts.filter(a => this.storeAllowed(a.store)).map(a => a.name).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+    const names = Array.from(new Set(this.acts.filter(a => this.storeAllowed(a.store)).map(a => a.name).filter(Boolean))).sort((a, b) => a.localeCompare(b));
     const all = [{ v: '', l: 'Semua' }];
     const chips = (key, list) => `<div class="chips">${[['', 'Semua']].concat(list.map(x => [x, x])).map(([v, l]) =>
       `<button type="button" class="chipbtn" data-f="${key}" data-v="${esc(v)}" aria-pressed="${d[key] === v}">${esc(l)}</button>`).join('')}</div>`;
     return `
       <section class="card" style="display:flex;flex-direction:column;gap:16px">
         ${regs.length > 1 ? `<div class="field"><span class="label">Regional</span>${chips('regional', regs)}</div>` : ''}
-        ${areas.length ? `<div class="field"><span class="label" id="flAreaLabel">Area</span>${this.ddHTML('flArea', all.concat(areas.map(a => ({ v: a, l: a }))), d.area, 'Semua')}</div>` : ''}
+        ${areas.length ? `<div class="field"><span class="label">Area</span>${this.ddHTML('flArea', all.concat(areas.map(a => ({ v: a, l: a }))), d.area, 'Semua')}</div>` : ''}
         <div class="field"><span class="label">Toko</span>${this.ddHTML('flStore', all.concat(stores.map(s => ({ v: s, l: this.short(s) }))), d.store, 'Semua', 'pin')}</div>
         <div class="field"><span class="label">Jenis kegiatan</span>${chips('type', CONFIG.ACTIVITY_TYPES.map(t => t.key))}</div>
-        <div class="field"><span class="label">PIC</span>${this.ddHTML('flPic', all.concat(pics.map(p => ({ v: p, l: p }))), d.pic, 'Semua', 'user')}</div>
+        <div class="field"><span class="label">Dicatat oleh</span>${this.ddHTML('flPic', all.concat(names.map(p => ({ v: p, l: p }))), d.pic, 'Semua', 'user')}</div>
       </section>
       <div class="filter-foot">
         <button class="btn-plain" data-act="f-reset">Hapus filter</button>
@@ -776,17 +893,20 @@ const App = {
     const regs = this.allRegionals();
     const activeRegs = this.access.length ? this.access : regs;
     const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    let install;
-    if (this.installed) install = `<div class="install-text"><b>Jadwalin sudah terpasang</b><small>Buka dari layar utama seperti aplikasi biasa.</small></div>`;
-    else if (this.installEvt) install = `<div class="install-text"><b>Pasang di layar utama</b><small>Buka seperti aplikasi biasa, bisa tanpa internet.</small></div><button class="btn-pill" data-act="install">Install</button>`;
-    else install = `<div class="install-text"><b>Pasang di layar utama</b><small>${ios ? 'Di Safari: tombol Bagikan → “Tambah ke Layar Utama”.' : 'Buka menu browser → “Install aplikasi” atau “Tambahkan ke layar utama”.'}</small></div>`;
+    let install = '';
+    if (!this.installed) {
+      const body = this.installEvt
+        ? `<div class="install-text"><b>Pasang di layar utama</b><small>Buka seperti aplikasi biasa, bisa tanpa internet.</small></div><button class="btn-pill" data-act="install">Install</button>`
+        : `<div class="install-text"><b>Pasang di layar utama</b><small>${ios ? 'Di Safari: tombol Bagikan → “Tambah ke Layar Utama”.' : 'Buka menu browser → “Install aplikasi” atau “Tambahkan ke layar utama”.'}</small></div>`;
+      install = `<section class="card install"><span class="blob">${ic('download')}</span>${body}</section>`;
+    }
     const vis = this.acts.filter(a => this.storeAllowed(a.store)).length;
     return `
       <section class="card profile">
         <div class="avatar">${esc((this.userName || '?').trim().charAt(0).toUpperCase() || '?')}</div>
-        <div class="p-body"><div class="p-name">${esc(this.userName || 'Nama belum diisi')}</div><div class="p-sub">Nama untuk setiap kegiatan baru</div></div>
+        <div class="p-body"><div class="p-name">${esc(this.userName || 'Nama belum diisi')}</div></div>
         <button class="round" data-act="edit-name" aria-label="Ubah nama">${ic('pencil')}</button>
-        ${this.editingName ? `<form class="name-edit" data-form="name"><input class="input" id="sName" maxlength="${CONFIG.LIMITS.name}" autocomplete="name" placeholder="Nama kamu" value="${esc(this.userName)}" aria-label="Nama kamu"><button type="submit" class="btn-plain">Simpan</button></form>` : ''}
+        ${this.editingName ? `<form class="name-edit" data-form="name"><input class="input" id="sName" maxlength="${CONFIG.LIMITS.name}" autocomplete="name" value="${esc(this.userName)}" aria-label="Nama kamu"><button type="submit" class="btn-plain">Simpan</button></form>` : ''}
       </section>
       <div class="group">
         <div class="g-label">Tampilan</div>
@@ -817,10 +937,11 @@ const App = {
           <div class="srow"><span>Sinkron terakhir</span><b>${this.lastSync ? new Date(this.lastSync).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}</b></div>
           <div class="srow"><span>Kegiatan tersimpan</span><b>${vis}</b></div>
           <div class="srow"><span>Toko terdaftar</span><b>${this.stores.filter(s => this.storeAllowed(s.store)).length}</b></div>
+          <div class="srow"><span>Kontak PIC</span><b>${this.contacts.length}</b></div>
           <button class="btn-soft" data-act="reload">${ic('refresh')}Muat ulang data</button>
         </section>
       </div>
-      <section class="card install"><span class="blob">${ic('download')}</span>${install}</section>
+      ${install}
       <div class="group">
         <div class="g-label">Aplikasi</div>
         <section class="card">
@@ -843,35 +964,31 @@ const App = {
     $('#calDays').addEventListener('click', (e) => {
       const b = e.target.closest('.day[data-d]');
       if (!b) return;
-      this.sel = b.dataset.d;
+      const d = b.dataset.d;
+      this.sel = d;
+      const x = pd(d);
+      if (x.getMonth() !== this.m || x.getFullYear() !== this.y) this.setMonthOf(d);
       if (this.agendaMode !== 'tanggal') { this.agendaMode = 'tanggal'; this.write('jw_agenda', ''); }
-      if (this.q) this.setQuery('');
       this.renderCal();
       this.renderSide();
-      if (window.innerWidth < 720) {
+      if (window.innerWidth < 1100) {
         const ag = $('#agenda');
-        if (ag && ag.getBoundingClientRect().top > window.innerHeight - 80) ag.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (ag && ag.getBoundingClientRect().top > window.innerHeight - 90) ag.scrollIntoView({ behavior: this.reduceMotion() ? 'auto' : 'smooth', block: 'start' });
       }
     });
     $('#calPrev').addEventListener('click', () => this.shiftCal(-1));
     $('#calNext').addEventListener('click', () => this.shiftCal(1));
-    $('#calMode').addEventListener('click', (e) => {
-      const b = e.target.closest('[data-mode]');
-      if (!b) return;
-      this.calMode = b.dataset.mode;
-      this.write('jw_calmode', this.calMode === 'minggu' ? 'minggu' : '');
-      this.y = pd(this.sel).getFullYear();
-      this.m = pd(this.sel).getMonth();
-      this.renderCal();
-    });
     $('#calToday').addEventListener('click', () => {
       const t = this.today();
       this.sel = t;
-      this.y = pd(t).getFullYear();
-      this.m = pd(t).getMonth();
+      this.setMonthOf(t);
       this.renderCal();
       this.renderSide();
     });
+    let raf = 0;
+    const onScroll = () => { if (raf) return; raf = requestAnimationFrame(() => { raf = 0; this.updateCompact(); }); };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
 
     $('#side').addEventListener('click', (e) => {
       const qa = e.target.closest('[data-qa]');
@@ -881,23 +998,22 @@ const App = {
       const am = e.target.closest('[data-amode]');
       if (am) { this.agendaMode = am.dataset.amode; this.write('jw_agenda', this.agendaMode === 'bulan' ? 'bulan' : ''); this.renderSide(); return; }
       const act = e.target.closest('[data-act]');
-      if (!act) return;
-      if (act.dataset.act === 'add-day') this.openForm(null, this.agendaMode === 'tanggal' ? this.sel : undefined);
-      if (act.dataset.act === 'nu-all') { this.nuAll = true; this.renderSide(); }
+      if (act && act.dataset.act === 'nu-all') { this.nuAll = true; this.renderSide(); }
     });
 
     $('#btnAdd').addEventListener('click', () => this.openForm(null));
     $('#fab').addEventListener('click', () => this.openForm(null));
     $('#btnFilter').addEventListener('click', () => this.openFilter());
     $('#btnSettings').addEventListener('click', () => this.openSettings());
-    $('#btnSearch').addEventListener('click', () => {
-      const open = !$('#app').classList.contains('search-open');
-      $('#app').classList.toggle('search-open', open);
-      $('#btnSearch').setAttribute('aria-expanded', String(open));
-      if (open) $('#q').focus(); else this.setQuery('');
+    $('#btnSearch').addEventListener('click', () => { if (this.searchOpen) this.closeSearch(); else this.openSearch(); });
+    $('#qClose').addEventListener('click', () => this.closeSearch());
+    $('#q').addEventListener('input', () => this.renderSearch());
+    $('#searchResults').addEventListener('click', (e) => {
+      const open = e.target.closest('[data-open]');
+      if (!open) return;
+      this.closeSearch();
+      this.openDetail(open.dataset.open);
     });
-    $('#q').addEventListener('input', (e) => { this.q = e.target.value; this.renderSide(); });
-    $('#q').addEventListener('keydown', (e) => { if (e.key === 'Escape') { this.setQuery(''); e.target.blur(); } });
 
     $('#scrim').addEventListener('click', () => this.closeOverlay());
     $('#drawerClose').addEventListener('click', () => this.closeOverlay());
@@ -944,10 +1060,8 @@ const App = {
       e.preventDefault();
       const v = $('#sName').value.trim();
       if (!v) { this.toast('Nama tidak boleh kosong.'); return; }
-      this.userName = v.slice(0, CONFIG.LIMITS.name);
-      this.write('jw_name', this.userName);
+      this.setUserName(v);
       this.editingName = false;
-      this.renderTop();
       this.renderDrawer();
       this.toast('Nama disimpan');
     });
@@ -958,52 +1072,44 @@ const App = {
       const opt = e.target.closest('.dd-opt');
       if (opt) { this.ddPick(opt.closest('.dropdown'), opt.dataset.v); return; }
       const d = this.draft;
-      if (!d) return;
+      if (!d || d.step !== 'form') return;
       const tile = e.target.closest('[data-type]');
       if (tile) {
         if (tile.dataset.type === d.type) return;
         this.keepDraft();
         d.type = tile.dataset.type;
-        if (!this.numberField(this.type(d.type))) d.k2 = '';
         this.formError = '';
         this.renderForm(true);
         return;
       }
-      const chip = e.target.closest('[data-date]');
-      if (chip) {
-        this.keepDraft();
-        const t = this.today(), tmr = addDays(t, 1);
-        if (chip.dataset.date === 'today') d.date = t;
-        else if (chip.dataset.date === 'tomorrow') d.date = tmr;
-        else if (d.date === t || d.date === tmr) d.date = addDays(t, 2);
-        this.renderForm(false);
-        if (chip.dataset.date === 'other') { const di = $('#fDate'); if (di) { di.focus(); try { di.showPicker(); } catch {} } }
-        return;
-      }
       const step = e.target.closest('[data-step]');
       if (step) {
-        const inp = $('#fK2');
+        const inp = $('#f_k2');
         const v = Math.max(0, Math.min(99999, (parseInt(inp.value, 10) || 0) + Number(step.dataset.step)));
         inp.value = v;
         d.k2 = String(v);
-        return;
       }
-      const act = e.target.closest('[data-act]');
-      if (act && act.dataset.act === 'ask-name') { this.keepDraft(); d.askName = true; this.renderForm(false); const n = $('#fName'); if (n) n.focus(); }
     });
-    $('#dialogBody').addEventListener('input', () => {
-      if (!this.formError) return;
-      this.formError = '';
-      const box = $('#dialogBody .form-error');
-      if (box) box.remove();
+    $('#dialogBody').addEventListener('input', (e) => {
+      if (this.formError) {
+        this.formError = '';
+        const box = $('#dialogBody .form-error');
+        if (box) box.remove();
+      }
+      if (e.target.id === 'f_picName') {
+        const c = this.contactOf(e.target.value);
+        const phone = $('#f_picPhone');
+        if (c && c.phone && phone && !phone.value) phone.value = c.phone;
+      }
     });
-    $('#dialogBody').addEventListener('change', (e) => {
-      if (e.target.id === 'fDate' && e.target.value && this.draft) { this.keepDraft(); this.draft.date = e.target.value; this.renderForm(false); }
+    $('#dialog').addEventListener('submit', (e) => {
+      e.preventDefault();
+      if (this.draft && this.draft.step === 'name') this.submitName(); else this.saveForm();
     });
-    $('#dialog').addEventListener('submit', (e) => { e.preventDefault(); this.saveForm(); });
 
     document.addEventListener('click', (e) => {
       if (!e.target.closest('.dropdown')) this.ddClose();
+      if (this.searchOpen && !e.target.closest('#searchPop') && !e.target.closest('#btnSearch')) this.closeSearch();
       const th = e.target.closest('[data-theme-set]');
       if (th) { this.setTheme(th.dataset.themeSet); return; }
       const pa = e.target.closest('[data-pal]');
@@ -1012,6 +1118,7 @@ const App = {
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
       if (document.querySelector('.dropdown.open')) { this.ddClose(); return; }
+      if (this.searchOpen) { this.closeSearch(); $('#btnSearch').focus(); return; }
       if (this.overlay) this.closeOverlay();
     });
     window.addEventListener('popstate', () => {
@@ -1026,6 +1133,10 @@ const App = {
     });
 
     this.installed = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    window.matchMedia('(display-mode: standalone)').addEventListener('change', (e) => {
+      this.installed = e.matches;
+      if (this.drawerKind === 'settings') this.renderDrawer();
+    });
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       this.installEvt = e;
@@ -1036,24 +1147,6 @@ const App = {
       this.installed = true;
       if (this.drawerKind === 'settings') this.renderDrawer();
     });
-  },
-  setQuery(v) {
-    this.q = v;
-    $('#q').value = v;
-    this.renderSide();
-  },
-  shiftCal(dir) {
-    if (this.calMode === 'minggu') {
-      this.sel = addDays(this.sel, dir * 7);
-      this.y = pd(this.sel).getFullYear();
-      this.m = pd(this.sel).getMonth();
-    } else {
-      const x = new Date(this.y, this.m + dir, 1);
-      this.y = x.getFullYear();
-      this.m = x.getMonth();
-    }
-    this.renderCal();
-    this.renderSide();
   },
   toggleRegional(r) {
     const regs = this.allRegionals();
@@ -1070,7 +1163,10 @@ const App = {
     const e = this.installEvt;
     if (!e) return;
     e.prompt();
-    try { await e.userChoice; } catch {}
+    try {
+      const choice = await e.userChoice;
+      if (choice && choice.outcome === 'accepted') this.installed = true;
+    } catch {}
     this.installEvt = null;
     if (this.drawerKind === 'settings') this.renderDrawer();
   },
@@ -1088,12 +1184,14 @@ const App = {
   },
   toast(msg) {
     const t = $('#toast');
+    clearTimeout(this.toastTimer);
+    clearTimeout(t._hideT);
+    t.classList.remove('out');
     t.hidden = true;
     void t.offsetWidth;
     t.textContent = msg;
     t.hidden = false;
-    clearTimeout(this.toastTimer);
-    this.toastTimer = setTimeout(() => { t.hidden = true; }, 3200);
+    this.toastTimer = setTimeout(() => this.hideEl(t), 3200);
   }
 };
 

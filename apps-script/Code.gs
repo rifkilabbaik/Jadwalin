@@ -1,26 +1,42 @@
 
 
 const SPREADSHEET_ID = '1wwfqVmS_dn8MhjUc93nDQT-KqDccndoRg4rKwBQpscM';
-const SHEETS = { DATA: 'Data', TOKO: 'Daftar Toko' };
+const SHEETS = { DATA: 'Data', TOKO: 'Daftar Toko', KONTAK: 'Kontak', SAMPAH: 'Sampah' };
 
 // [key, header bawaan, alias header (huruf kecil)]
 const DATA_FIELDS = [
   ['id',        'ID',           ['id', 'id kegiatan']],
   ['date',      'Tanggal',      ['tanggal', 'tgl', 'date', 'tanggal kegiatan']],
-  ['name',      'Nama',         ['nama', 'nama pic', 'pic']],
+  ['name',      'Nama',         ['nama', 'nama pencatat', 'dicatat oleh']],
   ['store',     'Nama Toko',    ['nama toko', 'toko', 'nama store', 'store', 'cabang']],
   ['type',      'Kegiatan',     ['kegiatan', 'jenis kegiatan', 'tipe kegiatan']],
   ['k1',        'Keterangan 1', ['keterangan 1', 'keterangan1', 'ket 1']],
   ['k2',        'Keterangan 2', ['keterangan 2', 'keterangan2', 'ket 2']],
+  ['picName',   'Nama PIC',     ['nama pic', 'pic']],
+  ['picPhone',  'Nomor PIC',    ['nomor pic', 'no pic', 'no. pic', 'no hp pic', 'nomor hp pic', 'telepon pic', 'kontak pic']],
+  ['note',      'Keterangan',   ['keterangan', 'catatan']],
   ['status',    'Status',       ['status']],
   ['createdAt', 'Dibuat',       ['dibuat', 'created at', 'timestamp']],
   ['updatedAt', 'Diubah',       ['diubah', 'updated at']]
+];
+const SAMPAH_FIELDS = DATA_FIELDS.concat([
+  ['deletedAt', 'Dihapus',      ['dihapus', 'dihapus pada']],
+  ['deletedBy', 'Dihapus oleh', ['dihapus oleh']]
+]);
+const KONTAK_FIELDS = [
+  ['picName',   'Nama PIC',  ['nama pic', 'nama', 'pic']],
+  ['picPhone',  'Nomor PIC', ['nomor pic', 'nomor', 'no pic', 'no hp', 'nomor hp', 'telepon']],
+  ['store',     'Toko',      ['toko', 'nama toko']],
+  ['createdAt', 'Dibuat',    ['dibuat']],
+  ['updatedAt', 'Diubah',    ['diubah']]
 ];
 const TOKO_FIELDS = [
   ['regional', 'Regional',  ['regional', 'region']],
   ['area',     'Area',      ['area']],
   ['store',    'Nama Toko', ['nama toko', 'toko', 'nama store', 'store', 'cabang', 'branch']]
 ];
+// Kolom yang disimpan sebagai teks supaya tidak diubah Sheets (tanggal, nol di depan nomor HP).
+const TEXT_KEYS = ['date', 'picPhone'];
 
 const STATUSES = ['Terjadwal', 'Selesai', 'Batal'];
 const STATUS_ALIASES = {
@@ -28,14 +44,18 @@ const STATUS_ALIASES = {
   'selesai': 'Selesai', 'terlaksana': 'Selesai', 'sudah': 'Selesai', 'done': 'Selesai',
   'batal': 'Batal', 'dibatalkan': 'Batal', 'cancel': 'Batal', 'cancelled': 'Batal'
 };
-const LIMITS = { name: 60, store: 120, type: 40, k1: 140, k2: 140 };
+const LIMITS = { name: 60, store: 120, type: 40, k1: 140, k2: 140, picName: 60, picPhone: 30, note: 300 };
 
 function doGet(e) {
   return _handle(e, (p) => {
     const a = p.action || 'fetchAll';
-    if (a === 'fetchAll')      return { status: 'ok', data: { kegiatan: _fetchKegiatan(), toko: _fetchToko(), ts: new Date().toISOString() } };
+    if (a === 'fetchAll') {
+      _getSheetSoft(SHEETS.SAMPAH, SAMPAH_FIELDS);
+      return { status: 'ok', data: { kegiatan: _fetchKegiatan(), toko: _fetchToko(), kontak: _fetchKontak(), ts: new Date().toISOString() } };
+    }
     if (a === 'fetchKegiatan') return { status: 'ok', data: _fetchKegiatan() };
     if (a === 'fetchToko')     return { status: 'ok', data: _fetchToko() };
+    if (a === 'fetchKontak')   return { status: 'ok', data: _fetchKontak() };
     if (a === 'status')        return { status: 'ok', data: _status() };
     throw new Error('Unknown action: ' + a);
   });
@@ -46,7 +66,7 @@ function doPost(e) {
     const b = JSON.parse(e.postData.contents);
     if (b.action === 'addKegiatan')    return { status: 'ok', data: _addKegiatan(b.row || {}) };
     if (b.action === 'updateKegiatan') return { status: 'ok', data: _updateKegiatan(b.row || {}) };
-    if (b.action === 'deleteKegiatan') return { status: 'ok', data: _deleteKegiatan(b.id) };
+    if (b.action === 'deleteKegiatan') return { status: 'ok', data: _deleteKegiatan(b.id, b.by) };
     throw new Error('Unknown action: ' + b.action);
   });
 }
@@ -71,6 +91,8 @@ function _withLock(fn) {
   lock.waitLock(20000);
   try { return fn(); } finally { lock.releaseLock(); }
 }
+
+/* ---------- Data ---------- */
 
 function _fetchKegiatan() {
   let sheet = _getSheetSoft(SHEETS.DATA, DATA_FIELDS);
@@ -99,6 +121,183 @@ function _fetchKegiatan() {
   return out;
 }
 
+function _addKegiatan(row) {
+  const clean = _validate(row);
+  return _withLock(() => {
+    const sheet = _getSheetSoft(SHEETS.DATA, DATA_FIELDS);
+    const ix = _index(sheet, DATA_FIELDS, DATA_FIELDS.map(f => f[0]));
+    const now = _now();
+    clean.id = _newId();
+    clean.status = clean.status || STATUSES[0];
+    clean.createdAt = now;
+    clean.updatedAt = now;
+    const target = sheet.getLastRow() + 1;
+    _writeFields(sheet, ix, target, clean, DATA_FIELDS);
+    _upsertKontak(clean, now);
+    return _toRecord(sheet.getRange(target, 1, 1, ix.width).getValues()[0], ix, target);
+  });
+}
+
+function _updateKegiatan(row) {
+  const id = _str(row.id);
+  if (!id) throw new Error('ID kegiatan kosong');
+  const clean = _validate(row);
+  return _withLock(() => {
+    const sheet = _getSheetSoft(SHEETS.DATA, DATA_FIELDS);
+    const ix = _index(sheet, DATA_FIELDS, DATA_FIELDS.map(f => f[0]));
+    const target = _findRow(sheet, ix, id);
+    clean.status = clean.status || STATUSES[0];
+    clean.updatedAt = _now();
+    _writeFields(sheet, ix, target, clean, DATA_FIELDS);
+    _upsertKontak(clean, clean.updatedAt);
+    return _toRecord(sheet.getRange(target, 1, 1, ix.width).getValues()[0], ix, target);
+  });
+}
+
+// Baris yang dihapus dipindah ke sheet Sampah (lengkap dengan waktu & siapa yang menghapus).
+function _deleteKegiatan(rawId, by) {
+  const id = _str(rawId);
+  if (!id) throw new Error('ID kegiatan kosong');
+  return _withLock(() => {
+    const sheet = _getSheetSoft(SHEETS.DATA, DATA_FIELDS);
+    const ix = _index(sheet, DATA_FIELDS, ['id']);
+    const target = _findRow(sheet, ix, id);
+    const rec = _toRecord(sheet.getRange(target, 1, 1, ix.width).getValues()[0], ix, target);
+    delete rec.row;
+    rec.deletedAt = _now();
+    rec.deletedBy = _str(by).slice(0, LIMITS.name);
+    const trash = _getSheetSoft(SHEETS.SAMPAH, SAMPAH_FIELDS);
+    const tix = _index(trash, SAMPAH_FIELDS, SAMPAH_FIELDS.map(f => f[0]));
+    _writeFields(trash, tix, trash.getLastRow() + 1, rec, SAMPAH_FIELDS);
+    sheet.deleteRow(target);
+    return { id: id };
+  });
+}
+
+function _findRow(sheet, ix, id) {
+  const last = sheet.getLastRow();
+  if (last >= 2) {
+    const ids = sheet.getRange(2, ix.col.id + 1, last - 1, 1).getValues();
+    for (let i = 0; i < ids.length; i++) {
+      if (_str(ids[i][0]) === id) return i + 2;
+    }
+  }
+  throw new Error('Kegiatan tidak ditemukan. Muat ulang data lalu coba lagi.');
+}
+
+function _validate(row) {
+  const date = _normalizeDate(row.date);
+  if (!date) throw new Error('Tanggal kegiatan tidak valid');
+  const out = { date: date, status: _normStatus(row.status) };
+  ['name', 'store', 'type', 'k1', 'k2', 'picName', 'picPhone', 'note'].forEach(k => {
+    out[k] = _str(row[k]).slice(0, LIMITS[k]);
+  });
+  if (!out.name)  throw new Error('Nama wajib diisi');
+  if (!out.store) throw new Error('Nama Toko wajib diisi');
+  if (!out.type)  throw new Error('Kegiatan wajib diisi');
+  if (out.picPhone && !/^[0-9+()\-.\s]{6,}$/.test(out.picPhone)) throw new Error('Nomor PIC tidak valid');
+  return out;
+}
+
+function _normStatus(v) {
+  const s = _str(v);
+  if (!s) return '';
+  return STATUS_ALIASES[s.toLowerCase()] || s;
+}
+
+function _toRecord(r, ix, rowNum) {
+  const at = (k) => (ix.col[k] === undefined ? '' : r[ix.col[k]]);
+  return {
+    id: _str(at('id')),
+    date: _normalizeDate(at('date')) || '',
+    name: _str(at('name')),
+    store: _str(at('store')),
+    type: _str(at('type')),
+    k1: _str(at('k1')),
+    k2: _str(at('k2')),
+    picName: _str(at('picName')),
+    picPhone: _str(at('picPhone')),
+    note: _str(at('note')),
+    status: _normStatus(at('status')) || STATUSES[0],
+    createdAt: _stamp(at('createdAt')),
+    updatedAt: _stamp(at('updatedAt')),
+    row: rowNum
+  };
+}
+
+function _hasContent(r, ix) {
+  return ['date', 'name', 'store', 'type'].some(k => ix.col[k] !== undefined && _str(r[ix.col[k]]) !== '');
+}
+
+/* ---------- Kontak ---------- */
+
+function _fetchKontak() {
+  const sheet = _getSheetSoft(SHEETS.KONTAK, KONTAK_FIELDS);
+  if (sheet.getLastRow() < 2) _backfillKontak();
+  return _readKontak(sheet);
+}
+
+function _readKontak(sheet) {
+  if (sheet.getLastRow() < 2) return [];
+  const ix = _index(sheet, KONTAK_FIELDS);
+  if (ix.col.picName === undefined) return [];
+  return _dataValues(sheet)
+    .map(r => ({
+      name: _str(r[ix.col.picName]),
+      phone: ix.col.picPhone === undefined ? '' : _str(r[ix.col.picPhone]),
+      store: ix.col.store === undefined ? '' : _str(r[ix.col.store])
+    }))
+    .filter(c => c.name);
+}
+
+// Isi awal sheet Kontak dari PIC yang sudah tercatat di sheet Data.
+function _backfillKontak() {
+  const data = _ss().getSheetByName(SHEETS.DATA);
+  if (!data || data.getLastRow() < 2) return;
+  const ix = _index(data, DATA_FIELDS);
+  if (ix.col.picName === undefined) return;
+  const recs = _dataValues(data).map(r => _toRecord(r, ix, 0)).filter(r => r.picName);
+  if (!recs.length) return;
+  _withLock(() => {
+    const now = _now();
+    recs.forEach(r => _upsertKontak(r, now));
+  });
+}
+
+// Simpan / perbarui PIC di sheet Kontak (kunci: Nama PIC, tidak peka huruf besar-kecil).
+function _upsertKontak(rec, now) {
+  const name = _str(rec.picName);
+  if (!name) return;
+  const sheet = _getSheetSoft(SHEETS.KONTAK, KONTAK_FIELDS);
+  const ix = _index(sheet, KONTAK_FIELDS, KONTAK_FIELDS.map(f => f[0]));
+  const last = sheet.getLastRow();
+  let target = 0, current = null;
+  if (last >= 2) {
+    const values = sheet.getRange(2, 1, last - 1, ix.width).getValues();
+    for (let i = 0; i < values.length; i++) {
+      if (_str(values[i][ix.col.picName]).toLowerCase() === name.toLowerCase()) {
+        target = i + 2;
+        current = values[i];
+        break;
+      }
+    }
+  }
+  if (!target) {
+    _writeFields(sheet, ix, last + 1, { picName: name, picPhone: _str(rec.picPhone), store: _str(rec.store), createdAt: now, updatedAt: now }, KONTAK_FIELDS);
+    return;
+  }
+  const patch = {};
+  const phone = _str(rec.picPhone);
+  if (phone && phone !== _str(current[ix.col.picPhone])) patch.picPhone = phone;
+  if (rec.store && _str(rec.store) !== _str(current[ix.col.store])) patch.store = _str(rec.store);
+  if (Object.keys(patch).length) {
+    patch.updatedAt = now;
+    _writeFields(sheet, ix, target, patch, KONTAK_FIELDS);
+  }
+}
+
+/* ---------- Daftar Toko ---------- */
+
 function _fetchToko() {
   const sheet = _getSheetSoft(SHEETS.TOKO, TOKO_FIELDS);
   if (sheet.getLastRow() < 2) return [];
@@ -122,113 +321,18 @@ function _fetchToko() {
 
 function _status() {
   const ss = _ss();
-  const data = ss.getSheetByName(SHEETS.DATA);
-  const toko = ss.getSheetByName(SHEETS.TOKO);
+  const rows = (name) => { const s = ss.getSheetByName(name); return s ? Math.max(0, s.getLastRow() - 1) : 0; };
   return {
     spreadsheet: ss.getName(),
-    dataRows: data ? Math.max(0, data.getLastRow() - 1) : 0,
-    tokoRows: toko ? Math.max(0, toko.getLastRow() - 1) : 0,
+    dataRows: rows(SHEETS.DATA),
+    tokoRows: rows(SHEETS.TOKO),
+    kontakRows: rows(SHEETS.KONTAK),
+    sampahRows: rows(SHEETS.SAMPAH),
     timestamp: new Date().toISOString()
   };
 }
 
-function _addKegiatan(row) {
-  const clean = _validate(row);
-  return _withLock(() => {
-    const sheet = _getSheetSoft(SHEETS.DATA, DATA_FIELDS);
-    const ix = _index(sheet, DATA_FIELDS, DATA_FIELDS.map(f => f[0]));
-    const now = _now();
-    clean.id = _newId();
-    clean.status = clean.status || STATUSES[0];
-    clean.createdAt = now;
-    clean.updatedAt = now;
-    const target = sheet.getLastRow() + 1;
-    _writeFields(sheet, ix, target, clean);
-    return _toRecord(sheet.getRange(target, 1, 1, ix.width).getValues()[0], ix, target);
-  });
-}
-
-function _updateKegiatan(row) {
-  const id = _str(row.id);
-  if (!id) throw new Error('ID kegiatan kosong');
-  const clean = _validate(row);
-  return _withLock(() => {
-    const sheet = _getSheetSoft(SHEETS.DATA, DATA_FIELDS);
-    const ix = _index(sheet, DATA_FIELDS, DATA_FIELDS.map(f => f[0]));
-    const target = _findRow(sheet, ix, id);
-    clean.status = clean.status || STATUSES[0];
-    clean.updatedAt = _now();
-    _writeFields(sheet, ix, target, clean);
-    return _toRecord(sheet.getRange(target, 1, 1, ix.width).getValues()[0], ix, target);
-  });
-}
-
-function _deleteKegiatan(rawId) {
-  const id = _str(rawId);
-  if (!id) throw new Error('ID kegiatan kosong');
-  return _withLock(() => {
-    const sheet = _getSheetSoft(SHEETS.DATA, DATA_FIELDS);
-    const ix = _index(sheet, DATA_FIELDS, ['id']);
-    sheet.deleteRow(_findRow(sheet, ix, id));
-    return { id: id };
-  });
-}
-
-function _findRow(sheet, ix, id) {
-  const last = sheet.getLastRow();
-  if (last >= 2) {
-    const ids = sheet.getRange(2, ix.col.id + 1, last - 1, 1).getValues();
-    for (let i = 0; i < ids.length; i++) {
-      if (_str(ids[i][0]) === id) return i + 2;
-    }
-  }
-  throw new Error('Kegiatan tidak ditemukan. Muat ulang data lalu coba lagi.');
-}
-
-function _validate(row) {
-  const date = _normalizeDate(row.date);
-  if (!date) throw new Error('Tanggal kegiatan tidak valid');
-  const out = {
-    date: date,
-    name: _str(row.name).slice(0, LIMITS.name),
-    store: _str(row.store).slice(0, LIMITS.store),
-    type: _str(row.type).slice(0, LIMITS.type),
-    k1: _str(row.k1).slice(0, LIMITS.k1),
-    k2: _str(row.k2).slice(0, LIMITS.k2),
-    status: _normStatus(row.status)
-  };
-  if (!out.name)  throw new Error('Nama wajib diisi');
-  if (!out.store) throw new Error('Nama Toko wajib diisi');
-  if (!out.type)  throw new Error('Kegiatan wajib diisi');
-  return out;
-}
-
-function _normStatus(v) {
-  const s = _str(v);
-  if (!s) return '';
-  return STATUS_ALIASES[s.toLowerCase()] || s;
-}
-
-function _toRecord(r, ix, rowNum) {
-  const at = (k) => (ix.col[k] === undefined ? '' : r[ix.col[k]]);
-  return {
-    id: _str(at('id')),
-    date: _normalizeDate(at('date')) || '',
-    name: _str(at('name')),
-    store: _str(at('store')),
-    type: _str(at('type')),
-    k1: _str(at('k1')),
-    k2: _str(at('k2')),
-    status: _normStatus(at('status')) || STATUSES[0],
-    createdAt: _stamp(at('createdAt')),
-    updatedAt: _stamp(at('updatedAt')),
-    row: rowNum
-  };
-}
-
-function _hasContent(r, ix) {
-  return ['date', 'name', 'store', 'type'].some(k => ix.col[k] !== undefined && _str(r[ix.col[k]]) !== '');
-}
+/* ---------- helpers ---------- */
 
 function _dataValues(sheet) {
   const last = sheet.getLastRow();
@@ -238,12 +342,12 @@ function _dataValues(sheet) {
 
 // Tulis hanya kolom milik aplikasi, dikelompokkan per blok kolom yang bersebelahan,
 // supaya kolom tambahan/rumus di sheet tidak tertimpa.
-function _writeFields(sheet, ix, rowNum, rec) {
-  const cells = DATA_FIELDS
+function _writeFields(sheet, ix, rowNum, rec, fields) {
+  const cells = fields
     .filter(f => rec[f[0]] !== undefined && ix.col[f[0]] !== undefined)
-    .map(f => ({ col: ix.col[f[0]], val: rec[f[0]] }))
+    .map(f => ({ key: f[0], col: ix.col[f[0]], val: rec[f[0]] }))
     .sort((a, b) => a.col - b.col);
-  if (ix.col.date !== undefined) sheet.getRange(rowNum, ix.col.date + 1).setNumberFormat('@');
+  cells.forEach(c => { if (TEXT_KEYS.indexOf(c.key) >= 0) sheet.getRange(rowNum, c.col + 1).setNumberFormat('@'); });
   let i = 0;
   while (i < cells.length) {
     let j = i;
