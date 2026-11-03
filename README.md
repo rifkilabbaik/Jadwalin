@@ -4,11 +4,12 @@ PWA (bisa di-install) untuk mencatat dan memantau agenda kegiatan toko: yang **a
 
 ## Fitur
 
-- **Satu layar Agenda**: ringkasan (hari ini, minggu ini, perlu update, selesai bulan ini), kalender, dan daftar kegiatan.
-- **Kalender kegiatan** (tata letak seperti Google Calendar, termasuk tanggal bulan sebelum/sesudah). Saat halaman digulir ke bawah di HP/tablet, kalender menempel di atas dan menyusut jadi satu minggu (*Minggu 1, 2, …*); tombol ‹ › lalu berpindah per minggu. Di HP tiap tanggal diberi maksimal 3 tanda: jenis kegiatan yang berbeda didahulukan, dan jika lebih dari 3 kegiatan tanda ketiga menjadi `+N`. Di tablet/PC nama kegiatannya tertulis di kotak tanggal dengan aturan yang sama.
-- **Daftar kegiatan**: pilih *Tanggal* (kegiatan di tanggal terpilih + yang akan datang) atau *Sebulan* (semua kegiatan di bulan yang dilihat, dibagi Akan dilaksanakan / Sudah dilaksanakan). Tiap kartu hanya berisi jenis kegiatan, nama (mis. Nama TK), dan nama toko.
+- **Halaman utama** hanya berisi kalender dan *Perlu update*.
+- **Kalender kegiatan**: minggu dimulai hari **Minggu** (tanggal 1 diletakkan di bawah nama harinya). Tampilan *Bulan* atau *Minggu* (judulnya *Minggu 1, 2, …*). Di HP tiap tanggal diberi maksimal 3 tanda: jenis kegiatan yang berbeda didahulukan, dan jika lebih dari 3 kegiatan tanda ketiga menjadi `+N`. Di tablet/PC nama kegiatannya tertulis di kotak tanggal.
+- **Ketuk tanggal** → pop up berisi kegiatan di tanggal itu (jenis, nama, toko), dengan tombol ke *Daftar kegiatan*.
+- **Daftar kegiatan** (tombol di bawah kalender atau di pop up tanggal): semua kegiatan sebulan, dibagi Akan dilaksanakan / Sudah dilaksanakan, dengan tombol ‹ › untuk pindah bulan. Tombol kembali membawa ke tampilan sebelumnya (detail → daftar → pop up tanggal).
 - **Perlu update**: kegiatan yang sudah lewat tapi masih Terjadwal, dengan tombol ✓ (selesai) dan ✕ (batal) langsung di baris. Kartunya hilang sendiri jika semua sudah diupdate.
-- **Tambah & ubah kegiatan** lewat tombol **+ Tambah**: form dari bawah layar (HP) atau jendela di tengah (tablet/PC). Jika nama belum diisi, pengguna diminta mengisi nama dulu. Nama PIC yang pernah dicatat muncul sebagai saran, dan nomornya terisi otomatis.
+- **Tambah & ubah kegiatan** lewat tombol **+ Tambah**: tanggalnya mengikuti tanggal yang terakhir diketuk di kalender. Form dari bawah layar (HP) atau jendela di tengah (tablet/PC); 5 jenis kegiatan tampil dalam satu baris. Jika nama belum diisi, pengguna diminta mengisi nama dulu. Nama PIC yang pernah dicatat muncul sebagai saran, dan nomornya terisi otomatis.
 - **Detail kegiatan**: ganti status (Terjadwal / Selesai / Batal), ketuk Nomor PIC untuk chat WhatsApp (wa.me), bagikan ke WhatsApp, ubah, atau hapus (dengan konfirmasi; data dipindah ke sheet `Sampah`).
 - **Cari**: tekan tombol cari, kotak pencarian dan hasilnya muncul melayang di bawah tombol. **Filter**: regional, area, toko, jenis kegiatan, pencatat.
 - **Pengaturan**: nama, tema (Terang / Gelap / Otomatis), warna (Mint / Lavender / Peach), regional yang ditampilkan, info data & muat ulang, install (disembunyikan jika aplikasi sudah terpasang), bersihkan cache.
@@ -18,7 +19,7 @@ PWA (bisa di-install) untuk mencatat dan memantau agenda kegiatan toko: yang **a
 
 | Sheet | Isi |
 |---|---|
-| `Data` | Data kegiatan. Kolom dibaca berdasarkan **nama header** (urutan bebas). Kolom yang belum ada ditambahkan otomatis di ujung kanan: `ID`, `Tanggal`, `Nama`, `Nama Toko`, `Kegiatan`, `Keterangan 1`, `Keterangan 2`, `Nama PIC`, `Nomor PIC`, `Keterangan`, `Status`, `Dibuat`, `Diubah`. Kolom lain milik Anda tidak disentuh. |
+| `Data` | Data kegiatan. `Nama` = orang yang menginput kegiatan (tampil sebagai *Dicatat oleh*); `Nama PIC` & `Nomor PIC` = penanggung jawab acara (pihak TK/komunitas/event), bukan penginput. Kolom dibaca berdasarkan **nama header** (urutan bebas). Kolom yang belum ada ditambahkan otomatis di ujung kanan: `ID`, `Tanggal`, `Nama`, `Nama Toko`, `Kegiatan`, `Keterangan 1`, `Keterangan 2`, `Nama PIC`, `Nomor PIC`, `Keterangan`, `Status`, `Dibuat`, `Diubah`. Kolom lain milik Anda tidak disentuh. |
 | `Daftar Toko` | Acuan nama toko & filter. Header yang dikenali: `Nama Toko` (atau `Toko` / `Nama Store` / `Store` / `Cabang`), `Regional`, `Area`. Sheet ini hanya dibaca. |
 | `Kontak` | Dibuat otomatis. Daftar PIC: `Nama PIC`, `Nomor PIC`, `Toko`, `Dibuat`, `Diubah`. Setiap kegiatan yang disimpan dengan Nama PIC menambah/memperbarui barisnya (nama sama = baris sama). Saat pertama dibuat, isinya diambil dari PIC yang sudah ada di sheet `Data`. |
 | `Sampah` | Dibuat otomatis. Kegiatan yang dihapus dari aplikasi dipindah ke sini, ditambah kolom `Dihapus` (waktu) dan `Dihapus oleh`. Untuk memulihkan, salin barisnya kembali ke `Data`. |
@@ -40,7 +41,7 @@ Catatan:
 
 ## Setup Apps Script
 
-Lakukan setiap kali `apps-script/Code.gs` berubah (versi 2.1 menambah kolom PIC, sheet `Kontak`, dan sheet `Sampah`):
+Lakukan setiap kali `apps-script/Code.gs` berubah (versi 2.1–2.2 menambah kolom PIC, sheet `Kontak`, dan sheet `Sampah`):
 
 1. Buka spreadsheet → **Extensions → Apps Script**.
 2. Ganti seluruh isi `Code.gs` dengan isi file [`apps-script/Code.gs`](apps-script/Code.gs), lalu simpan.
