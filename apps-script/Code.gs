@@ -7,12 +7,14 @@ const SHEETS = { DATA: 'Data', TOKO: 'Daftar Toko', KONTAK: 'Kontak', SAMPAH: 'S
 const DATA_FIELDS = [
   ['id',        'ID',           ['id', 'id kegiatan']],
   ['date',      'Tanggal',      ['tanggal', 'tgl', 'date', 'tanggal kegiatan']],
-  ['name',      'Nama',         ['nama', 'nama pencatat', 'dicatat oleh']],
+  // Nama = orang yang menginput kegiatan di aplikasi (ditampilkan "Dicatat oleh").
+  ['name',      'Nama',         ['nama', 'nama pencatat', 'dicatat oleh', 'nama penginput', 'diinput oleh', 'penginput', 'pencatat']],
   ['store',     'Nama Toko',    ['nama toko', 'toko', 'nama store', 'store', 'cabang']],
   ['type',      'Kegiatan',     ['kegiatan', 'jenis kegiatan', 'tipe kegiatan']],
   ['k1',        'Keterangan 1', ['keterangan 1', 'keterangan1', 'ket 1']],
   ['k2',        'Keterangan 2', ['keterangan 2', 'keterangan2', 'ket 2']],
-  ['picName',   'Nama PIC',     ['nama pic', 'pic']],
+  // Nama PIC = penanggung jawab acara (pihak TK/komunitas/event), BUKAN orang yang menginput.
+  ['picName',   'Nama PIC',     ['nama pic', 'pic', 'penanggung jawab', 'nama penanggung jawab', 'pj acara']],
   ['picPhone',  'Nomor PIC',    ['nomor pic', 'no pic', 'no. pic', 'no hp pic', 'nomor hp pic', 'telepon pic', 'kontak pic']],
   ['note',      'Keterangan',   ['keterangan', 'catatan']],
   ['status',    'Status',       ['status']],

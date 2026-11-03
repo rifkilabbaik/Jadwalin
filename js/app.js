@@ -5,7 +5,8 @@ const pad2 = (n) => String(n).padStart(2, '0');
 const pd = (d) => { const [y, m, dd] = String(d).split('-').map(Number); return new Date(y, m - 1, dd); };
 const fmt = (x) => x.getFullYear() + '-' + pad2(x.getMonth() + 1) + '-' + pad2(x.getDate());
 const addDays = (d, n) => { const x = pd(d); x.setDate(x.getDate() + n); return fmt(x); };
-const weekStart = (d) => { const x = pd(d); x.setDate(x.getDate() - (x.getDay() + 6) % 7); return fmt(x); };
+// Minggu dimulai hari Minggu.
+const weekStart = (d) => { const x = pd(d); x.setDate(x.getDate() - x.getDay()); return fmt(x); };
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const ic = (n, cls) => `<svg class="i${cls ? ' ' + cls : ''}" aria-hidden="true"><use href="#i-${n}"/></svg>`;
 const PHONE_RE = /^[0-9+()\-.\s]{6,}$/;
@@ -16,10 +17,11 @@ const App = {
   access: [],
   filter: { regional: '', area: '', store: '', type: '', pic: '' },
   sel: '', y: 0, m: 0,
-  compact: false, agendaMode: 'tanggal', nuAll: false,
+  calMode: 'bulan', nuAll: false, listY: 0, listM: 0,
   theme: 'auto', palette: 'mint', userName: '', lastStore: '',
   lastSync: null, connected: false,
-  overlay: null, drawerKind: null, detailId: null, confirmDel: false, busy: false,
+  overlay: null, drawerKind: null, dialogKind: null, dayDate: '', detailId: null, confirmDel: false, busy: false,
+  navStack: [], pushDepth: 0,
   draft: null, formError: '', fdraft: null, editingName: false, searchOpen: false,
   installEvt: null, installed: false,
 
@@ -32,10 +34,8 @@ const App = {
     this.m = pd(t).getMonth();
 
     const params = new URLSearchParams(location.search);
-    if (params.get('view') === 'bulan') this.agendaMode = 'bulan';
 
     this.bind();
-    this.renderLegend();
 
     const ca = Sheets.loadList(Sheets.CACHE_KEY_ACTIVITY);
     const cs = Sheets.loadList(Sheets.CACHE_KEY_STORE);
@@ -54,6 +54,7 @@ const App = {
       await this.load(false);
     }
     if (params.get('add') === '1') this.openForm(null);
+    else if (params.get('view') === 'bulan') this.openList();
   },
 
   /* ---------- settings & theme ---------- */
@@ -66,7 +67,7 @@ const App = {
     this.palette = CONFIG.PALETTES[pa] ? pa : 'mint';
     this.userName = this.read('jw_name') || this.read('lastName') || '';
     this.lastStore = this.read('jw_store') || '';
-    this.agendaMode = this.read('jw_agenda') === 'bulan' ? 'bulan' : 'tanggal';
+    this.calMode = this.read('jw_calmode') === 'minggu' ? 'minggu' : 'bulan';
     try {
       const arr = JSON.parse(this.read('accessRegionals') || '[]');
       this.access = Array.isArray(arr) ? arr.filter(Boolean) : [];
@@ -189,7 +190,7 @@ const App = {
   fieldsOf(key) { const t = this.type(key); return t ? t.fields : CONFIG.GENERIC_FIELDS; },
   hue(key) { const t = this.type(key); return `--hue:var(${t ? t.colorVar : '--ink-3'})`; },
   typeOrder(key) { const i = CONFIG.ACTIVITY_TYPES.findIndex(t => t.key === key); return i < 0 ? 99 : i; },
-  titleOf(a) { const t = this.type(a.type); return a.k1 || (t ? t.desc : a.type) || 'Kegiatan'; },
+  titleOf(a) { return a.k1 || a.type || 'Kegiatan'; },
   byDate(a, b) { return a.date.localeCompare(b.date) || App.typeOrder(a.type) - App.typeOrder(b.type) || App.titleOf(a).localeCompare(App.titleOf(b)); },
   dShort(d) { const x = pd(d); return CONFIG.DAYS_SHORT[x.getDay()] + ', ' + x.getDate() + ' ' + CONFIG.MONTHS_SHORT[x.getMonth()]; },
   dFull(d) { const x = pd(d); return CONFIG.DAYS[x.getDay()] + ', ' + x.getDate() + ' ' + CONFIG.MONTHS[x.getMonth()] + ' ' + x.getFullYear(); },
@@ -210,26 +211,14 @@ const App = {
     const t = this.today();
     return this.visible().filter(a => a.date < t && a.status === 'Terjadwal').sort((a, b) => this.byDate(a, b));
   },
-  counts() {
-    const t = this.today(), ws = weekStart(t), we = addDays(ws, 6);
-    const vis = this.visible();
-    const live = vis.filter(a => a.status !== 'Batal');
-    return {
-      today: live.filter(a => a.date === t).length,
-      week: live.filter(a => a.date >= ws && a.date <= we).length,
-      need: vis.filter(a => a.date < t && a.status === 'Terjadwal').length,
-      done: vis.filter(a => a.status === 'Selesai' && a.date.slice(0, 7) === t.slice(0, 7)).length
-    };
-  },
-
   /* ---------- render ---------- */
   render() {
     this.renderTop();
-    this.renderStats();
     this.renderCal();
     this.renderSide();
     if (this.searchOpen) this.renderSearch();
     if (this.overlay === 'drawer' && this.drawerKind !== 'filter') this.renderDrawer();
+    if (this.overlay === 'dialog' && this.dialogKind === 'day') this.renderDay();
   },
   renderTop() {
     const t = pd(this.today());
@@ -239,81 +228,83 @@ const App = {
     $('#filterDot').hidden = this.filterCount() === 0;
     $('#btnFilter').setAttribute('aria-label', this.filterCount() ? 'Filter (' + this.filterCount() + ' aktif)' : 'Filter');
   },
-  renderStats() {
-    const c = this.counts();
-    $('#stats').innerHTML = [
-      ['cal', 'h-primary', c.today, 'hari ini', ''],
-      ['clock', 'h-primary', c.week, 'minggu ini', ''],
-      ['refresh', 'h-warn', c.need, 'perlu update', c.need ? ' warn' : ''],
-      ['check', 'h-ok', c.done, 'selesai bulan ini', '']
-    ].map(([i, h, n, label, w]) => `<div class="stat${w}"><span class="ib hue ${h}">${ic(i)}</span><div><b>${n}</b><span class="l">${label}</span></div></div>`).join('');
-  },
-  renderLegend() {
-    $('#legend').innerHTML = CONFIG.ACTIVITY_TYPES.map(t => `<span style="${this.hue(t.key)}"><i></i>${esc(t.key)}</span>`).join('');
-  },
 
-  /* ---------- calendar ---------- */
-  calRows() {
-    const off = (new Date(this.y, this.m, 1).getDay() + 6) % 7;
-    const dim = new Date(this.y, this.m + 1, 0).getDate();
-    const n = Math.ceil((off + dim) / 7);
-    const rows = [];
-    for (let r = 0; r < n; r++) {
-      const row = [];
-      for (let c = 0; c < 7; c++) row.push(fmt(new Date(this.y, this.m, 1 - off + r * 7 + c)));
-      rows.push(row);
+  /* ---------- calendar (minggu dimulai hari Minggu) ---------- */
+  calCells() {
+    if (this.calMode === 'minggu') {
+      const ws = weekStart(this.sel);
+      return Array.from({ length: 7 }, (_, i) => addDays(ws, i));
     }
-    return rows;
+    const off = new Date(this.y, this.m, 1).getDay();
+    const dim = new Date(this.y, this.m + 1, 0).getDate();
+    const cells = [];
+    for (let i = 0; i < off; i++) cells.push(null);
+    for (let d = 1; d <= dim; d++) cells.push(fmt(new Date(this.y, this.m, d)));
+    return cells;
   },
   weekNo(ds) {
     const x = pd(ds);
-    const off = (new Date(x.getFullYear(), x.getMonth(), 1).getDay() + 6) % 7;
-    return Math.floor((x.getDate() - 1 + off) / 7) + 1;
+    return Math.floor((x.getDate() - 1 + new Date(x.getFullYear(), x.getMonth(), 1).getDay()) / 7) + 1;
   },
-  // Maksimal 3 tanda per tanggal; jenis berbeda didahulukan. Jika lebih dari 3, tanda ketiga jadi +N.
-  calSlots(items) {
+  // Urutan tanda di tanggal: jenis kegiatan yang berbeda didahulukan, yang batal paling akhir.
+  slotOrder(items) {
     const sorted = items.slice().sort((a, b) =>
       (a.status === 'Batal') - (b.status === 'Batal') || this.typeOrder(a.type) - this.typeOrder(b.type) || this.titleOf(a).localeCompare(this.titleOf(b)));
     const firsts = [], rest = [], seen = new Set();
     sorted.forEach(a => { if (seen.has(a.type)) rest.push(a); else { seen.add(a.type); firsts.push(a); } });
-    const order = firsts.concat(rest);
-    return order.length <= 3 ? { shown: order, more: 0 } : { shown: order.slice(0, 2), more: order.length - 2 };
+    return firsts.concat(rest);
   },
   renderCal() {
     const t = this.today();
-    const rows = this.calRows();
+    const week = this.calMode === 'minggu';
     const byDay = {};
     this.visible().forEach(a => { (byDay[a.date] = byDay[a.date] || []).push(a); });
-    const cur = rows.findIndex(r => r.includes(this.sel));
-    $('#calDays').innerHTML = rows.map((r, i) => `<div class="wrow${i === cur ? ' cur' : ''}">` + r.map(ds => {
-      const x = pd(ds);
-      const items = byDay[ds] || [];
-      const { shown, more } = this.calSlots(items);
+    const maxEv = week ? 9 : 2;
+    $('#calDays').classList.toggle('week', week);
+    $('#calDays').innerHTML = this.calCells().map(ds => {
+      if (!ds) return '<span class="day blank"></span>';
+      const order = this.slotOrder(byDay[ds] || []);
+      // Titik: maksimal 3 tanda; jika lebih dari 3 kegiatan, tanda ketiga menjadi +N.
+      const dotList = order.length > 3 ? order.slice(0, 2) : order;
+      const dots = dotList.map(a => `<i class="${a.status === 'Batal' ? 'off' : ''}" style="${this.hue(a.type)}"></i>`).join('')
+        + (order.length > 3 ? `<b>+${order.length - 2}</b>` : '');
+      const evs = order.slice(0, maxEv).map(a =>
+        `<span class="ev hue${a.status === 'Batal' ? ' off' : ''}" style="${this.hue(a.type)}">${a.status === 'Selesai' ? '✓ ' : ''}${esc(this.titleOf(a))}</span>`).join('');
+      const more = order.length > maxEv ? `<span class="more">+${order.length - maxEv}</span>` : '';
       const cls = ['day'];
-      if (x.getMonth() !== this.m) cls.push('out');
-      if (ds === t) cls.push('today');
+      if (ds === t) cls.push('today'); else if (ds < t) cls.push('past');
       if (ds === this.sel) cls.push('sel');
-      const dots = shown.map(a => `<i class="${a.status === 'Batal' ? 'off' : ''}" style="${this.hue(a.type)}"></i>`).join('') + (more ? `<b>+${more}</b>` : '');
-      const evs = shown.map(a => `<span class="ev hue${a.status === 'Batal' ? ' off' : ''}" style="${this.hue(a.type)}">${a.status === 'Selesai' ? '✓ ' : ''}${esc(this.titleOf(a))}</span>`).join('')
-        + (more ? `<span class="ev more">+${more} lagi</span>` : '');
-      const label = this.dFull(ds) + (items.length ? ', ' + items.length + ' kegiatan' : '');
+      const label = this.dFull(ds) + (order.length ? ', ' + order.length + ' kegiatan' : '');
       return `<button class="${cls.join(' ')}" data-d="${ds}" aria-label="${label}" aria-pressed="${ds === this.sel}">
-        <span class="n">${x.getDate()}</span><span class="dots">${dots}</span><span class="evs">${evs}</span></button>`;
-    }).join('') + '</div>').join('');
-    $('#cal').classList.toggle('compact', this.compact);
-    this.renderCalHead();
-  },
-  renderCalHead() {
+        <span class="day-top"><span class="n">${pd(ds).getDate()}</span>${more}</span>
+        <span class="dots">${dots}</span><span class="evs">${evs}</span></button>`;
+    }).join('');
     const month = CONFIG.MONTHS[this.m] + ' ' + this.y;
-    $('#calTitle').innerHTML = this.compact ? `Minggu ${this.weekNo(this.sel)}<small>${esc(month)}</small>` : esc(month);
-    $('#calPrev').setAttribute('aria-label', this.compact ? 'Minggu sebelumnya' : 'Bulan sebelumnya');
-    $('#calNext').setAttribute('aria-label', this.compact ? 'Minggu berikutnya' : 'Bulan berikutnya');
-    const t = this.today(), tp = pd(t);
-    $('#calToday').hidden = this.sel === t && this.y === tp.getFullYear() && this.m === tp.getMonth();
+    $('#calTitle').innerHTML = week ? `Minggu ${this.weekNo(this.sel)}<small>${esc(month)}</small>` : esc(month);
+    $('#calPrev').setAttribute('aria-label', week ? 'Minggu sebelumnya' : 'Bulan sebelumnya');
+    $('#calNext').setAttribute('aria-label', week ? 'Minggu berikutnya' : 'Bulan berikutnya');
+    document.querySelectorAll('#calMode [data-mode]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === this.calMode)));
+    const tp = pd(t);
+    const viewingToday = week ? weekStart(this.sel) === weekStart(t) : (this.y === tp.getFullYear() && this.m === tp.getMonth());
+    $('#calToday').hidden = viewingToday && this.sel === t;
   },
   setMonthOf(ds) { const x = pd(ds); this.y = x.getFullYear(); this.m = x.getMonth(); },
+  setCalMode(mode) {
+    if (mode === this.calMode) return;
+    if (mode === 'minggu') {
+      const sp = pd(this.sel);
+      if (sp.getFullYear() !== this.y || sp.getMonth() !== this.m) {
+        const t = this.today(), tp = pd(t);
+        this.sel = tp.getFullYear() === this.y && tp.getMonth() === this.m ? t : fmt(new Date(this.y, this.m, 1));
+      }
+    }
+    this.calMode = mode;
+    this.write('jw_calmode', mode === 'minggu' ? 'minggu' : '');
+    this.setMonthOf(this.sel);
+    this.renderCal();
+  },
   shiftCal(dir) {
-    if (this.compact) {
+    if (this.calMode === 'minggu') {
       this.sel = addDays(this.sel, dir * 7);
       this.setMonthOf(this.sel);
     } else {
@@ -322,46 +313,24 @@ const App = {
       this.m = x.getMonth();
     }
     this.renderCal();
-    this.renderSide();
-  },
-  // Kalender menempel di atas; saat halaman digulir ke bawah, kalender menyusut jadi satu minggu.
-  updateCompact() {
-    let c = this.compact;
-    if (window.innerWidth >= 1100) c = false;
-    else {
-      const top = $('#calSentinel').getBoundingClientRect().top;
-      const stick = parseFloat(getComputedStyle($('#cal')).top) || 8;
-      if (!c && top < stick - 4) c = true;
-      else if (c && top > stick + 4) c = false;
-    }
-    if (c === this.compact) return;
-    if (c) {
-      const sp = pd(this.sel);
-      if (sp.getFullYear() !== this.y || sp.getMonth() !== this.m) {
-        const t = this.today(), tp = pd(t);
-        this.sel = tp.getFullYear() === this.y && tp.getMonth() === this.m ? t : fmt(new Date(this.y, this.m, 1));
-        this.renderCal();
-        this.renderSide();
-      }
-    }
-    this.compact = c;
-    requestAnimationFrame(() => {
-      $('#cal').classList.toggle('compact', this.compact);
-      this.renderCalHead();
-    });
   },
 
   /* ---------- side panel ---------- */
-  card(a) {
+  // withIcon: di pop up tanggal, tanggalnya sama semua, jadi kotak kiri diganti ikon jenis kegiatan.
+  card(a, withIcon) {
     const t = this.today();
     const x = pd(a.date);
+    const ty = this.type(a.type);
+    const lead = withIcon
+      ? `<span class="date-b hue type-b">${ic(ty ? ty.icon : 'tag')}</span>`
+      : `<span class="date-b hue"><b>${x.getDate()}</b><small>${CONFIG.DAYS_SHORT[x.getDay()]}</small></span>`;
     let pill = '';
     if (a.status === 'Selesai') pill = `<span class="pill hue h-ok">Selesai</span>`;
     else if (a.status === 'Batal') pill = `<span class="pill hue h-bad">Batal</span>`;
     else if (a.date < t && a.status === 'Terjadwal') pill = `<span class="pill hue h-warn">Perlu update</span>`;
     else if (a.status !== 'Terjadwal') pill = `<span class="pill hue h-primary">${esc(a.status)}</span>`;
     return `<button class="act${a.status === 'Batal' ? ' is-batal' : ''}" style="${this.hue(a.type)}" data-open="${esc(a.id)}">
-      <span class="date-b hue"><b>${x.getDate()}</b><small>${CONFIG.DAYS_SHORT[x.getDay()]}</small></span>
+      ${lead}
       <span class="act-body">
         <span class="act-top"><span class="chip hue">${esc(a.type || '—')}</span>${pill}</span>
         <span class="act-title">${esc(this.titleOf(a))}</span>
@@ -388,32 +357,53 @@ const App = {
     </section>`;
   },
   renderSide() {
+    const html = this.needsCard();
+    $('#side').innerHTML = html;
+    $('#side').hidden = !html;
+    $('#main').classList.toggle('solo', !html);
+  },
+
+  /* ---------- pop up kegiatan di tanggal ---------- */
+  openDay(ds) {
+    this.dayDate = ds;
+    this.dialogKind = 'day';
+    this.draft = null;
+    this.formError = '';
+    this.showOverlay('dialog');
+    this.renderDay();
+  },
+  renderDay() {
+    const ds = this.dayDate;
+    const items = this.visible().filter(a => a.date === ds).sort((a, b) => this.byDate(a, b));
+    $('#dialogTitle').textContent = this.dFull(ds);
+    $('#dialogBody').innerHTML = `
+      <div class="day-list">${items.length ? items.map(a => this.card(a, true)).join('')
+        : `<div class="empty"><span class="blob">${ic('cal')}</span><p>Belum ada kegiatan di tanggal ini.</p></div>`}</div>
+      <button type="button" class="btn-soft day-go" data-act="day-list">${ic('list')}Daftar kegiatan</button>`;
+  },
+
+  /* ---------- daftar kegiatan (sebulan) ---------- */
+  openList() {
+    this.listY = this.y;
+    this.listM = this.m;
+    if (this.overlay === 'dialog' && this.dialogKind === 'day') this.navPush();
+    this.openDrawer('list');
+  },
+  listHTML() {
     const t = this.today();
-    const seg = `<div class="seg small" role="group" aria-label="Isi daftar">
-      <button data-amode="tanggal" aria-pressed="${this.agendaMode === 'tanggal'}">Tanggal</button>
-      <button data-amode="bulan" aria-pressed="${this.agendaMode === 'bulan'}">Sebulan</button></div>`;
-    const empty = (msg) => `<div class="empty"><span class="blob">${ic('cal')}</span><p>${msg}</p></div>`;
-    let body;
-    if (this.agendaMode === 'bulan') {
-      const key = this.y + '-' + pad2(this.m + 1);
-      const rows = this.visible().filter(a => a.date.slice(0, 7) === key);
-      const up = rows.filter(a => a.date >= t).sort((a, b) => this.byDate(a, b));
-      const past = rows.filter(a => a.date < t).sort((a, b) => this.byDate(b, a));
-      body = `<div class="sec-head"><span class="sec-title">${CONFIG.MONTHS[this.m]} ${this.y}</span><span class="sec-note">${rows.length} kegiatan</span>${seg}</div>`;
-      if (!rows.length) body += empty('Belum ada kegiatan di bulan ini.');
-      if (up.length) body += `<div class="list-group"><span>Akan dilaksanakan</span><span>${up.length}</span></div>` + up.map(a => this.card(a)).join('');
-      if (past.length) body += `<div class="list-group"><span>Sudah dilaksanakan</span><span>${past.length}</span></div>` + past.map(a => this.card(a)).join('');
-    } else {
-      const day = this.visible().filter(a => a.date === this.sel).sort((a, b) => this.byDate(a, b));
-      const tmr = addDays(t, 1);
-      const head = this.sel === t ? 'Hari ini' : this.sel === tmr ? 'Besok' : this.sel === addDays(t, -1) ? 'Kemarin' : this.dShort(this.sel);
-      const note = [t, tmr, addDays(t, -1)].includes(this.sel) ? this.dShort(this.sel) : '';
-      body = `<div class="sec-head"><span class="sec-title">${head}</span>${note ? `<span class="sec-note">${note}</span>` : ''}${seg}</div>`;
-      body += day.length ? day.map(a => this.card(a)).join('') : empty('Belum ada kegiatan di tanggal ini.');
-      const next = this.visible().filter(a => a.date > this.sel && a.status !== 'Batal').sort((a, b) => this.byDate(a, b)).slice(0, 4);
-      if (next.length) body += `<div class="sec-head" style="margin-top:6px"><span class="sec-title">Akan datang</span></div>` + next.map(a => this.card(a)).join('');
-    }
-    $('#side').innerHTML = this.needsCard() + `<section class="agenda" id="agenda" aria-label="Daftar kegiatan">${body}</section>`;
+    const key = this.listY + '-' + pad2(this.listM + 1);
+    const rows = this.visible().filter(a => a.date.slice(0, 7) === key);
+    const up = rows.filter(a => a.date >= t).sort((a, b) => this.byDate(a, b));
+    const past = rows.filter(a => a.date < t).sort((a, b) => this.byDate(b, a));
+    let html = `<div class="list-nav">
+        <button class="mini-round" data-act="list-prev" aria-label="Bulan sebelumnya">${ic('chev-l')}</button>
+        <div class="list-month"><b>${CONFIG.MONTHS[this.listM]} ${this.listY}</b><small>${rows.length} kegiatan</small></div>
+        <button class="mini-round" data-act="list-next" aria-label="Bulan berikutnya">${ic('chev-r')}</button>
+      </div>`;
+    if (!rows.length) html += `<div class="empty"><span class="blob">${ic('cal')}</span><p>Belum ada kegiatan di bulan ini.</p></div>`;
+    if (up.length) html += `<div class="list-group"><span>Akan dilaksanakan</span><span>${up.length}</span></div>` + up.map(a => this.card(a)).join('');
+    if (past.length) html += `<div class="list-group"><span>Sudah dilaksanakan</span><span>${past.length}</span></div>` + past.map(a => this.card(a)).join('');
+    return `<div class="agenda">${html}</div>`;
   },
 
   /* ---------- search (melayang di bawah tombol cari) ---------- */
@@ -478,23 +468,55 @@ const App = {
     this.showEl($('#scrim'));
     document.body.classList.add('locked');
     if (!wasOpen) {
-      try { history.pushState({ jwOverlay: true }, ''); this.pushed = true; } catch { this.pushed = false; }
+      this.navStack = [];
+      this.pushDepth = 0;
+      try { history.pushState({ jwOverlay: true }, ''); this.pushDepth = 1; } catch {}
     }
     this.overlay = which;
   },
+  // Simpan tampilan sekarang (pop up tanggal / daftar) supaya tombol kembali membuka tampilan itu lagi.
+  navPush() {
+    let v = null;
+    if (this.overlay === 'dialog' && this.dialogKind === 'day') v = { overlay: 'dialog', kind: 'day', date: this.dayDate };
+    else if (this.overlay === 'drawer' && this.drawerKind === 'list') v = { overlay: 'drawer', kind: 'list', y: this.listY, m: this.listM };
+    if (!v) return;
+    this.navStack.push(v);
+    try { history.pushState({ jwOverlay: true }, ''); this.pushDepth++; } catch {}
+  },
   closeOverlay(fromPop) {
     if (!this.overlay) return;
+    if (fromPop) this.pushDepth = Math.max(0, this.pushDepth - 1);
+    const back = this.navStack.pop();
+    this.confirmDel = false;
+    this.editingName = false;
+    this.draft = null;
+    this.formError = '';
+    if (back) {
+      if (!fromPop && this.pushDepth > 1) { this.pushDepth--; this.skipPop = true; history.back(); }
+      if (back.overlay === 'drawer') {
+        this.drawerKind = back.kind;
+        this.listY = back.y;
+        this.listM = back.m;
+        this.showOverlay('drawer');
+        this.renderDrawer();
+      } else {
+        this.dialogKind = 'day';
+        this.dayDate = back.date;
+        this.showOverlay('dialog');
+        this.renderDay();
+      }
+      return;
+    }
     this.hideEl($('#drawer'));
     this.hideEl($('#dialog'));
     this.hideEl($('#scrim'));
     document.body.classList.remove('locked');
     this.overlay = null;
     this.drawerKind = null;
-    this.draft = null;
-    this.confirmDel = false;
-    this.editingName = false;
-    if (this.pushed && !fromPop) { this.pushed = false; this.skipPop = true; history.back(); }
-    else this.pushed = false;
+    this.dialogKind = null;
+    if (!fromPop && this.pushDepth > 0) { this.skipPop = true; history.go(-this.pushDepth); }
+    this.pushDepth = 0;
+    this.navStack = [];
     if (this.lastFocus && document.contains(this.lastFocus)) { try { this.lastFocus.focus({ preventScroll: true }); } catch {} }
   },
   openDrawer(kind) {
@@ -518,11 +540,14 @@ const App = {
     } else if (k === 'filter') {
       $('#drawerTitle').textContent = 'Filter';
       $('#drawerBody').innerHTML = this.filterHTML();
+    } else if (k === 'list') {
+      $('#drawerTitle').textContent = 'Daftar kegiatan';
+      $('#drawerBody').innerHTML = this.listHTML();
     }
   },
 
   /* ---------- detail ---------- */
-  openDetail(id) { this.detailId = id; this.openDrawer('detail'); },
+  openDetail(id) { this.navPush(); this.detailId = id; this.openDrawer('detail'); },
   detailHTML(a) {
     const t = this.type(a.type);
     const rows = [['pin', 'Toko', esc(a.store || '—')]];
@@ -543,7 +568,7 @@ const App = {
     return `
       <section class="hero" style="${this.hue(a.type)}">
         <span class="ib">${ic(t ? t.icon : 'cal')}</span>
-        <span class="chip">${esc(a.type || 'Kegiatan')}${t ? ' · ' + esc(t.desc) : ''}</span>
+        <span class="chip">${esc(a.type || 'Kegiatan')}</span>
         <h3>${esc(this.titleOf(a))}</h3>
         <div class="when">${this.dFull(a.date)}</div>
       </section>
@@ -656,13 +681,14 @@ const App = {
       this.draft = { editId: a.id, type: a.type, date: a.date, store: a.store, name: a.name || this.userName, status: a.status };
       SLOTS.forEach(k => { this.draft[k] = a[k] || ''; });
     } else {
-      const d = date || (this.sel >= t ? this.sel : t);
+      const d = date || this.sel || t;
       const store = this.filter.store || (this.storeList().includes(this.lastStore) ? this.lastStore : '');
       this.draft = { editId: null, type: this.filter.type || CONFIG.ACTIVITY_TYPES[0].key, date: d, store, name: this.userName, status: 'Terjadwal' };
       SLOTS.forEach(k => { this.draft[k] = ''; });
     }
     this.draft.step = this.draft.name ? 'form' : 'name';
     this.formError = '';
+    this.dialogKind = 'form';
     this.showOverlay('dialog');
     this.renderForm(false);
     if (window.matchMedia('(pointer: fine)').matches) {
@@ -713,10 +739,10 @@ const App = {
     }
     const edit = !!d.editId;
     const types = CONFIG.ACTIVITY_TYPES.slice();
-    if (d.type && !this.type(d.type)) types.push({ key: d.type, desc: 'Jenis lain', icon: 'tag' });
+    if (d.type && !this.type(d.type)) types.push({ key: d.type, icon: 'tag' });
     const tiles = types.map(x => `
       <button type="button" class="tile${popType && x.key === d.type ? ' pop' : ''}" style="${this.hue(x.key)}" data-type="${esc(x.key)}" aria-pressed="${x.key === d.type}">
-        <span class="ib hue">${ic(x.icon)}</span><span class="tile-text"><b>${esc(x.key)}</b><small>${esc(x.desc)}</small></span>
+        <span class="ib hue">${ic(x.icon)}</span><b>${esc(x.key)}</b>
       </button>`).join('');
     const stores = this.storeList();
     if (d.store && !stores.includes(d.store)) stores.unshift(d.store);
@@ -783,8 +809,6 @@ const App = {
       if (!edit) { this.lastStore = d.store; this.write('jw_store', d.store); }
       this.sel = rec.date;
       this.setMonthOf(rec.date);
-      this.agendaMode = 'tanggal';
-      this.write('jw_agenda', '');
       this.closeOverlay();
       this.render();
       this.toast(edit ? 'Perubahan tersimpan' : 'Kegiatan tersimpan');
@@ -966,37 +990,29 @@ const App = {
       if (!b) return;
       const d = b.dataset.d;
       this.sel = d;
-      const x = pd(d);
-      if (x.getMonth() !== this.m || x.getFullYear() !== this.y) this.setMonthOf(d);
-      if (this.agendaMode !== 'tanggal') { this.agendaMode = 'tanggal'; this.write('jw_agenda', ''); }
+      if (this.calMode === 'minggu') this.setMonthOf(d);
       this.renderCal();
-      this.renderSide();
-      if (window.innerWidth < 1100) {
-        const ag = $('#agenda');
-        if (ag && ag.getBoundingClientRect().top > window.innerHeight - 90) ag.scrollIntoView({ behavior: this.reduceMotion() ? 'auto' : 'smooth', block: 'start' });
-      }
+      this.openDay(d);
     });
     $('#calPrev').addEventListener('click', () => this.shiftCal(-1));
     $('#calNext').addEventListener('click', () => this.shiftCal(1));
+    $('#calMode').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-mode]');
+      if (b) this.setCalMode(b.dataset.mode);
+    });
     $('#calToday').addEventListener('click', () => {
       const t = this.today();
       this.sel = t;
       this.setMonthOf(t);
       this.renderCal();
-      this.renderSide();
     });
-    let raf = 0;
-    const onScroll = () => { if (raf) return; raf = requestAnimationFrame(() => { raf = 0; this.updateCompact(); }); };
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onScroll);
+    $('#btnList').addEventListener('click', () => this.openList());
 
     $('#side').addEventListener('click', (e) => {
       const qa = e.target.closest('[data-qa]');
       if (qa) { this.quickAction(qa); return; }
       const open = e.target.closest('[data-open]');
       if (open) { this.openDetail(open.dataset.open); return; }
-      const am = e.target.closest('[data-amode]');
-      if (am) { this.agendaMode = am.dataset.amode; this.write('jw_agenda', this.agendaMode === 'bulan' ? 'bulan' : ''); this.renderSide(); return; }
       const act = e.target.closest('[data-act]');
       if (act && act.dataset.act === 'nu-all') { this.nuAll = true; this.renderSide(); }
     });
@@ -1024,6 +1040,21 @@ const App = {
       if (dd) { e.stopPropagation(); const w = dd.closest('.dropdown'); if (w.classList.contains('open')) this.ddClose(); else this.ddOpen(w); return; }
       const opt = e.target.closest('.dd-opt');
       if (opt) { this.ddPick(opt.closest('.dropdown'), opt.dataset.v); return; }
+      if (this.drawerKind === 'list') {
+        const open = e.target.closest('[data-open]');
+        if (open) { this.openDetail(open.dataset.open); return; }
+        const nav = e.target.closest('[data-act="list-prev"], [data-act="list-next"]');
+        if (nav) {
+          const x = new Date(this.listY, this.listM + (nav.dataset.act === 'list-next' ? 1 : -1), 1);
+          this.listY = x.getFullYear();
+          this.listM = x.getMonth();
+          this.renderDrawer();
+          $('#drawerBody').scrollTop = 0;
+          const btn = $('#drawerBody [data-act="' + nav.dataset.act + '"]');
+          if (btn) btn.focus({ preventScroll: true });
+        }
+        return;
+      }
       if (this.drawerKind === 'detail') {
         const s = e.target.closest('[data-status]');
         if (s) { this.detailStatus(s.dataset.status); return; }
@@ -1044,7 +1075,7 @@ const App = {
       const act = e.target.closest('[data-act]');
       if (!act) return;
       const a = act.dataset.act;
-      if (a === 'edit') { const x = this.acts.find(z => z.id === this.detailId); if (x) { this.drawerKind = null; this.openForm(x); } }
+      if (a === 'edit') { const x = this.acts.find(z => z.id === this.detailId); if (x) this.openForm(x); }
       else if (a === 'del') { this.confirmDel = true; this.renderDrawer(); }
       else if (a === 'cancel-del') { this.confirmDel = false; this.renderDrawer(); }
       else if (a === 'do-del') this.deleteDetail();
@@ -1067,6 +1098,12 @@ const App = {
     });
 
     $('#dialogBody').addEventListener('click', (e) => {
+      if (this.dialogKind === 'day') {
+        const open = e.target.closest('[data-open]');
+        if (open) { this.openDetail(open.dataset.open); return; }
+        if (e.target.closest('[data-act="day-list"]')) this.openList();
+        return;
+      }
       const dd = e.target.closest('.dd-btn');
       if (dd) { e.stopPropagation(); const w = dd.closest('.dropdown'); if (w.classList.contains('open')) this.ddClose(); else this.ddOpen(w); return; }
       const opt = e.target.closest('.dd-opt');
@@ -1091,6 +1128,7 @@ const App = {
       }
     });
     $('#dialogBody').addEventListener('input', (e) => {
+      if (this.dialogKind !== 'form') return;
       if (this.formError) {
         this.formError = '';
         const box = $('#dialogBody .form-error');
@@ -1104,7 +1142,8 @@ const App = {
     });
     $('#dialog').addEventListener('submit', (e) => {
       e.preventDefault();
-      if (this.draft && this.draft.step === 'name') this.submitName(); else this.saveForm();
+      if (this.dialogKind !== 'form' || !this.draft) return;
+      if (this.draft.step === 'name') this.submitName(); else this.saveForm();
     });
 
     document.addEventListener('click', (e) => {

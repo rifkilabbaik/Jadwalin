@@ -1,12 +1,12 @@
 const CONFIG = {
   APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbwN3F16Hr_igxyAX-m2cAhlHbYAc7gznVAld92SabzaVLv-A6X6z7sj30LcGl6iZaM4/exec',
-  APP_VERSION: '2.1',
+  APP_VERSION: '2.2',
 
   // Jenis kegiatan. `key` disimpan di kolom Kegiatan; colorVar merujuk ke token warna di css/style.css.
   // Isian: k1 = nama utama (judul kegiatan), k2 = isian kedua, lalu PIC & keterangan.
   ACTIVITY_TYPES: [
     {
-      key: 'FLD', desc: 'Kunjungan TK', colorVar: '--fld', icon: 'kid',
+      key: 'FLD', colorVar: '--fld', icon: 'kid',
       fields: [
         { slot: 'k1', label: 'Nama TK', max: 80, required: true },
         { slot: 'k2', label: 'Jumlah peserta', type: 'number', icon: 'people' },
@@ -16,7 +16,7 @@ const CONFIG = {
       ]
     },
     {
-      key: 'GCOM', desc: 'Komunitas', colorVar: '--gcom', icon: 'people',
+      key: 'GCOM', colorVar: '--gcom', icon: 'people',
       fields: [
         { slot: 'k1', label: 'Nama komunitas', max: 80, required: true },
         { slot: 'k2', label: 'Jumlah peserta', type: 'number', icon: 'people' },
@@ -26,7 +26,7 @@ const CONFIG = {
       ]
     },
     {
-      key: 'CX', desc: 'Pengalaman pelanggan', colorVar: '--cx', icon: 'star',
+      key: 'CX', colorVar: '--cx', icon: 'star',
       fields: [
         { slot: 'k1', label: 'Tujuan kunjungan', max: 140, required: true },
         { slot: 'picName', label: 'Nama PIC', max: 60, icon: 'user' },
@@ -35,7 +35,7 @@ const CONFIG = {
       ]
     },
     {
-      key: 'Support Event', desc: 'Dukungan acara', colorVar: '--se', icon: 'handshake',
+      key: 'Support Event', colorVar: '--se', icon: 'handshake',
       fields: [
         { slot: 'k1', label: 'Nama Event', max: 80, required: true },
         { slot: 'k2', label: 'Support', max: 140, required: true, icon: 'tag' },
@@ -45,7 +45,7 @@ const CONFIG = {
       ]
     },
     {
-      key: 'Lain-lain', desc: 'Kegiatan lainnya', colorVar: '--lain', icon: 'clipboard',
+      key: 'Lain-lain', colorVar: '--lain', icon: 'clipboard',
       fields: [
         { slot: 'k1', label: 'Keterangan', type: 'textarea', max: 140, required: true },
         { slot: 'picName', label: 'Nama PIC', max: 60, icon: 'user' },
