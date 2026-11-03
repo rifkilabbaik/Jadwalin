@@ -4,12 +4,12 @@ PWA (bisa di-install) untuk mencatat dan memantau agenda kegiatan toko: yang **a
 
 ## Fitur
 
-- **Halaman utama** hanya berisi kalender dan *Perlu update*.
+- **Halaman utama**: counter (hari ini, minggu ini, perlu update, selesai bulan ini), kalender, dan *Perlu update*.
 - **Kalender kegiatan**: minggu dimulai hari **Minggu** (tanggal 1 diletakkan di bawah nama harinya). Tampilan *Bulan* atau *Minggu* (judulnya *Minggu 1, 2, …*). Di HP tiap tanggal diberi maksimal 3 tanda: jenis kegiatan yang berbeda didahulukan, dan jika lebih dari 3 kegiatan tanda ketiga menjadi `+N`. Di tablet/PC nama kegiatannya tertulis di kotak tanggal.
-- **Ketuk tanggal** → pop up berisi kegiatan di tanggal itu (jenis, nama, toko), dengan tombol ke *Daftar kegiatan*.
-- **Daftar kegiatan** (tombol di bawah kalender atau di pop up tanggal): semua kegiatan sebulan, dibagi Akan dilaksanakan / Sudah dilaksanakan, dengan tombol ‹ › untuk pindah bulan. Tombol kembali membawa ke tampilan sebelumnya (detail → daftar → pop up tanggal).
+- **Ketuk tanggal** → pop up berisi kegiatan di tanggal itu (jenis, nama, toko), dengan tombol *Daftar kegiatan* dan *+ Tambah* (memakai tanggal itu) berdampingan.
+- **Daftar kegiatan** (tombol di bawah kalender atau di pop up tanggal): semua kegiatan sebulan, dibagi Akan dilaksanakan / Sudah dilaksanakan, dengan tombol ‹ › untuk pindah bulan. Di HP/tablet tampil di bawah header menggantikan counter, kalender, dan Perlu update; di PC kalender tetap dan daftar tampil di kolom kanan. Tombol ‹ di samping judul atau tombol kembali HP membawa ke halaman utama.
 - **Perlu update**: kegiatan yang sudah lewat tapi masih Terjadwal, dengan tombol ✓ (selesai) dan ✕ (batal) langsung di baris. Kartunya hilang sendiri jika semua sudah diupdate.
-- **Tambah & ubah kegiatan** lewat tombol **+ Tambah**: tanggalnya mengikuti tanggal yang terakhir diketuk di kalender. Form dari bawah layar (HP) atau jendela di tengah (tablet/PC); 5 jenis kegiatan tampil dalam satu baris. Jika nama belum diisi, pengguna diminta mengisi nama dulu. Nama PIC yang pernah dicatat muncul sebagai saran, dan nomornya terisi otomatis.
+- **Tambah & ubah kegiatan** lewat tombol **+ Tambah**: tanggalnya mengikuti tanggal yang terakhir diketuk di kalender. Form dari bawah layar (HP) atau jendela di tengah (tablet/PC); 5 jenis kegiatan tampil dalam satu baris. Jika nama belum diisi, pengguna diminta mengisi nama dulu. Nama PIC dan Nomor PIC diketik manual (tetap disimpan ke sheet `Kontak`).
 - **Detail kegiatan**: ganti status (Terjadwal / Selesai / Batal), ketuk Nomor PIC untuk chat WhatsApp (wa.me), bagikan ke WhatsApp, ubah, atau hapus (dengan konfirmasi; data dipindah ke sheet `Sampah`).
 - **Cari**: tekan tombol cari, kotak pencarian dan hasilnya muncul melayang di bawah tombol. **Filter**: regional, area, toko, jenis kegiatan, pencatat.
 - **Pengaturan**: nama, tema (Terang / Gelap / Otomatis), warna (Mint / Lavender / Peach), regional yang ditampilkan, info data & muat ulang, install (disembunyikan jika aplikasi sudah terpasang), bersihkan cache.

@@ -17,7 +17,7 @@ const App = {
   access: [],
   filter: { regional: '', area: '', store: '', type: '', pic: '' },
   sel: '', y: 0, m: 0,
-  calMode: 'bulan', nuAll: false, listY: 0, listM: 0,
+  calMode: 'bulan', nuAll: false, view: 'home', listY: 0, listM: 0, listPushed: false, homeScroll: 0,
   theme: 'auto', palette: 'mint', userName: '', lastStore: '',
   lastSync: null, connected: false,
   overlay: null, drawerKind: null, dialogKind: null, dayDate: '', detailId: null, confirmDel: false, busy: false,
@@ -211,11 +211,25 @@ const App = {
     const t = this.today();
     return this.visible().filter(a => a.date < t && a.status === 'Terjadwal').sort((a, b) => this.byDate(a, b));
   },
+  counts() {
+    const t = this.today(), ws = weekStart(t), we = addDays(ws, 6);
+    const vis = this.visible();
+    const live = vis.filter(a => a.status !== 'Batal');
+    return {
+      today: live.filter(a => a.date === t).length,
+      week: live.filter(a => a.date >= ws && a.date <= we).length,
+      need: vis.filter(a => a.date < t && a.status === 'Terjadwal').length,
+      done: vis.filter(a => a.status === 'Selesai' && a.date.slice(0, 7) === t.slice(0, 7)).length
+    };
+  },
+
   /* ---------- render ---------- */
   render() {
     this.renderTop();
+    this.renderStats();
     this.renderCal();
     this.renderSide();
+    if (this.view === 'list') this.renderList();
     if (this.searchOpen) this.renderSearch();
     if (this.overlay === 'drawer' && this.drawerKind !== 'filter') this.renderDrawer();
     if (this.overlay === 'dialog' && this.dialogKind === 'day') this.renderDay();
@@ -227,6 +241,16 @@ const App = {
     $('#helloLabel').textContent = first ? 'Halo, ' + first : 'Halo!';
     $('#filterDot').hidden = this.filterCount() === 0;
     $('#btnFilter').setAttribute('aria-label', this.filterCount() ? 'Filter (' + this.filterCount() + ' aktif)' : 'Filter');
+  },
+
+  renderStats() {
+    const c = this.counts();
+    $('#stats').innerHTML = [
+      ['cal', 'h-primary', c.today, 'hari ini', ''],
+      ['clock', 'h-primary', c.week, 'minggu ini', ''],
+      ['refresh', 'h-warn', c.need, 'perlu update', c.need ? ' warn' : ''],
+      ['check', 'h-ok', c.done, 'selesai bulan ini', '']
+    ].map(([i, h, n, label, w]) => `<div class="stat${w}"><span class="ib hue ${h}">${ic(i)}</span><div><b>${n}</b><span class="l">${label}</span></div></div>`).join('');
   },
 
   /* ---------- calendar (minggu dimulai hari Minggu) ---------- */
@@ -360,7 +384,7 @@ const App = {
     const html = this.needsCard();
     $('#side').innerHTML = html;
     $('#side').hidden = !html;
-    $('#main').classList.toggle('solo', !html);
+    $('#main').classList.toggle('solo', !html && this.view !== 'list');
   },
 
   /* ---------- pop up kegiatan di tanggal ---------- */
@@ -379,15 +403,53 @@ const App = {
     $('#dialogBody').innerHTML = `
       <div class="day-list">${items.length ? items.map(a => this.card(a, true)).join('')
         : `<div class="empty"><span class="blob">${ic('cal')}</span><p>Belum ada kegiatan di tanggal ini.</p></div>`}</div>
-      <button type="button" class="btn-soft day-go" data-act="day-list">${ic('list')}Daftar kegiatan</button>`;
+      <div class="row2 day-actions">
+        <button type="button" class="btn-soft day-go" data-act="day-list">${ic('list')}Daftar kegiatan</button>
+        <button type="button" class="btn-soft day-add" data-act="day-add">${ic('plus')}Tambah</button>
+      </div>`;
   },
 
-  /* ---------- daftar kegiatan (sebulan) ---------- */
-  openList() {
-    this.listY = this.y;
-    this.listM = this.m;
-    if (this.overlay === 'dialog' && this.dialogKind === 'day') this.navPush();
-    this.openDrawer('list');
+  /* ---------- daftar kegiatan (sebulan, di halaman) ---------- */
+  openList(fromDate) {
+    if (this.view === 'list') return;
+    const base = fromDate ? pd(fromDate) : new Date(this.y, this.m, 1);
+    if (this.overlay) {
+      // Dibuka dari pop up tanggal: entri riwayat pop up dipakai untuk tampilan daftar.
+      const reuse = this.pushDepth > 0;
+      this.navStack = [];
+      this.closeOverlay(true);
+      this.listPushed = reuse;
+    } else {
+      try { history.pushState({ jwList: true }, ''); this.listPushed = true; } catch { this.listPushed = false; }
+    }
+    this.homeScroll = window.scrollY;
+    this.listY = base.getFullYear();
+    this.listM = base.getMonth();
+    this.view = 'list';
+    this.applyView();
+    window.scrollTo(0, 0);
+  },
+  closeList(fromPop) {
+    if (this.view !== 'list') return;
+    this.view = 'home';
+    this.applyView();
+    if (!fromPop && this.listPushed) { this.skipPop = true; history.back(); }
+    this.listPushed = false;
+    window.scrollTo(0, this.homeScroll || 0);
+  },
+  applyView() {
+    const list = this.view === 'list';
+    $('#app').classList.toggle('view-list', list);
+    $('#listView').hidden = !list;
+    $('#btnList').setAttribute('aria-pressed', String(list));
+    if (list) this.renderList(); else $('#listView').innerHTML = '';
+    this.renderSide();
+  },
+  renderList() {
+    $('#listView').innerHTML = `<div class="lv-head">
+        <button class="round" data-act="list-close" aria-label="Kembali">${ic('chev-l')}</button>
+        <h2>Daftar kegiatan</h2>
+      </div>` + this.listHTML();
   },
   listHTML() {
     const t = this.today();
@@ -478,7 +540,6 @@ const App = {
   navPush() {
     let v = null;
     if (this.overlay === 'dialog' && this.dialogKind === 'day') v = { overlay: 'dialog', kind: 'day', date: this.dayDate };
-    else if (this.overlay === 'drawer' && this.drawerKind === 'list') v = { overlay: 'drawer', kind: 'list', y: this.listY, m: this.listM };
     if (!v) return;
     this.navStack.push(v);
     try { history.pushState({ jwOverlay: true }, ''); this.pushDepth++; } catch {}
@@ -493,18 +554,10 @@ const App = {
     this.formError = '';
     if (back) {
       if (!fromPop && this.pushDepth > 1) { this.pushDepth--; this.skipPop = true; history.back(); }
-      if (back.overlay === 'drawer') {
-        this.drawerKind = back.kind;
-        this.listY = back.y;
-        this.listM = back.m;
-        this.showOverlay('drawer');
-        this.renderDrawer();
-      } else {
-        this.dialogKind = 'day';
-        this.dayDate = back.date;
-        this.showOverlay('dialog');
-        this.renderDay();
-      }
+      this.dialogKind = 'day';
+      this.dayDate = back.date;
+      this.showOverlay('dialog');
+      this.renderDay();
       return;
     }
     this.hideEl($('#drawer'));
@@ -540,9 +593,6 @@ const App = {
     } else if (k === 'filter') {
       $('#drawerTitle').textContent = 'Filter';
       $('#drawerBody').innerHTML = this.filterHTML();
-    } else if (k === 'list') {
-      $('#drawerTitle').textContent = 'Daftar kegiatan';
-      $('#drawerBody').innerHTML = this.listHTML();
     }
   },
 
@@ -719,8 +769,7 @@ const App = {
     if (f.type === 'tel') {
       return `<div class="field">${label}<input class="input" id="${id}" type="tel" inputmode="tel" autocomplete="off" maxlength="${f.max || 30}" value="${val}"></div>`;
     }
-    const list = f.slot === 'picName' ? ' list="picList"' : '';
-    return `<div class="field">${label}<input class="input" id="${id}" maxlength="${f.max || 140}" autocomplete="off"${list} value="${val}"></div>`;
+    return `<div class="field">${label}<input class="input" id="${id}" maxlength="${f.max || 140}" autocomplete="off" value="${val}"></div>`;
   },
   renderForm(popType) {
     const d = this.draft;
@@ -749,7 +798,6 @@ const App = {
     const storeField = stores.length
       ? this.ddHTML('fStore', stores.map(s => ({ v: s, l: this.short(s) })), d.store, 'Pilih toko', 'pin')
       : `<input class="input" id="fStoreText" maxlength="120" value="${esc(d.store)}" autocomplete="off" aria-label="Toko">`;
-    const names = Array.from(new Set(this.contacts.map(c => c.name).filter(Boolean))).sort((a, b) => a.localeCompare(b));
 
     $('#dialogTitle').textContent = edit ? 'Ubah kegiatan' : 'Kegiatan baru';
     $('#dialogBody').innerHTML = `
@@ -759,7 +807,6 @@ const App = {
         <div class="field"><span class="label" id="fStoreLabel">Toko</span>${storeField}</div>
         ${this.fieldsOf(d.type).map(f => this.fieldHTML(f, d)).join('')}
       </div>
-      <datalist id="picList">${names.map(n => `<option value="${esc(n)}"></option>`).join('')}</datalist>
       ${this.formError ? `<div class="form-error" role="alert">${esc(this.formError)}</div>` : ''}
       <div class="form-foot"><button type="submit" class="btn-big" id="fSave">${edit ? 'Simpan perubahan' : 'Simpan kegiatan'}</button></div>`;
   },
@@ -1007,6 +1054,21 @@ const App = {
       this.renderCal();
     });
     $('#btnList').addEventListener('click', () => this.openList());
+    $('#listView').addEventListener('click', (e) => {
+      const open = e.target.closest('[data-open]');
+      if (open) { this.openDetail(open.dataset.open); return; }
+      const act = e.target.closest('[data-act]');
+      if (!act) return;
+      if (act.dataset.act === 'list-close') { this.closeList(); return; }
+      if (act.dataset.act === 'list-prev' || act.dataset.act === 'list-next') {
+        const x = new Date(this.listY, this.listM + (act.dataset.act === 'list-next' ? 1 : -1), 1);
+        this.listY = x.getFullYear();
+        this.listM = x.getMonth();
+        this.renderList();
+        const btn = $('#listView [data-act="' + act.dataset.act + '"]');
+        if (btn) btn.focus({ preventScroll: true });
+      }
+    });
 
     $('#side').addEventListener('click', (e) => {
       const qa = e.target.closest('[data-qa]');
@@ -1040,21 +1102,6 @@ const App = {
       if (dd) { e.stopPropagation(); const w = dd.closest('.dropdown'); if (w.classList.contains('open')) this.ddClose(); else this.ddOpen(w); return; }
       const opt = e.target.closest('.dd-opt');
       if (opt) { this.ddPick(opt.closest('.dropdown'), opt.dataset.v); return; }
-      if (this.drawerKind === 'list') {
-        const open = e.target.closest('[data-open]');
-        if (open) { this.openDetail(open.dataset.open); return; }
-        const nav = e.target.closest('[data-act="list-prev"], [data-act="list-next"]');
-        if (nav) {
-          const x = new Date(this.listY, this.listM + (nav.dataset.act === 'list-next' ? 1 : -1), 1);
-          this.listY = x.getFullYear();
-          this.listM = x.getMonth();
-          this.renderDrawer();
-          $('#drawerBody').scrollTop = 0;
-          const btn = $('#drawerBody [data-act="' + nav.dataset.act + '"]');
-          if (btn) btn.focus({ preventScroll: true });
-        }
-        return;
-      }
       if (this.drawerKind === 'detail') {
         const s = e.target.closest('[data-status]');
         if (s) { this.detailStatus(s.dataset.status); return; }
@@ -1101,7 +1148,8 @@ const App = {
       if (this.dialogKind === 'day') {
         const open = e.target.closest('[data-open]');
         if (open) { this.openDetail(open.dataset.open); return; }
-        if (e.target.closest('[data-act="day-list"]')) this.openList();
+        if (e.target.closest('[data-act="day-list"]')) { this.openList(this.dayDate); return; }
+        if (e.target.closest('[data-act="day-add"]')) { this.navPush(); this.openForm(null, this.dayDate); }
         return;
       }
       const dd = e.target.closest('.dd-btn');
@@ -1134,11 +1182,6 @@ const App = {
         const box = $('#dialogBody .form-error');
         if (box) box.remove();
       }
-      if (e.target.id === 'f_picName') {
-        const c = this.contactOf(e.target.value);
-        const phone = $('#f_picPhone');
-        if (c && c.phone && phone && !phone.value) phone.value = c.phone;
-      }
     });
     $('#dialog').addEventListener('submit', (e) => {
       e.preventDefault();
@@ -1158,11 +1201,13 @@ const App = {
       if (e.key !== 'Escape') return;
       if (document.querySelector('.dropdown.open')) { this.ddClose(); return; }
       if (this.searchOpen) { this.closeSearch(); $('#btnSearch').focus(); return; }
-      if (this.overlay) this.closeOverlay();
+      if (this.overlay) { this.closeOverlay(); return; }
+      if (this.view === 'list') this.closeList();
     });
     window.addEventListener('popstate', () => {
       if (this.skipPop) { this.skipPop = false; return; }
-      if (this.overlay) { this.pushed = false; this.closeOverlay(true); }
+      if (this.overlay) { this.closeOverlay(true); return; }
+      if (this.view === 'list') this.closeList(true);
     });
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => this.applyTheme());
     document.addEventListener('visibilitychange', () => {
