@@ -1,6 +1,6 @@
 
 
-const CACHE_NAME = 'jadwalin-v2';
+const CACHE_NAME = 'jadwalin-v3';
 const FONT_CACHE = 'jadwalin-fonts-v1';
 const APP_SHELL = [
   './',
