@@ -175,6 +175,13 @@ button { -webkit-tap-highlight-color: transparent; }
 /* ---------- stats ---------- */
 
 /* ---------- shared bits ---------- */
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.stat { background: var(--surface); border-radius: 20px; padding: 9px 11px 10px; box-shadow: var(--shadow-soft); display: flex; align-items: center; gap: 12px; min-width: 0; }
+.stat:nth-child(4) { display: none; }
+.stat .ib { display: none; width: 42px; height: 42px; border-radius: 15px; place-items: center; flex: none; }
+.stat b { display: block; font-family: var(--font-display); font-weight: 600; font-size: 24px; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.stat span.l { display: block; font-size: 11.5px; font-weight: 800; color: var(--ink-2); line-height: 1.25; }
+.stat.warn b { color: color-mix(in oklab, var(--warn) 62%, var(--ink)); }
 .card { background: var(--surface); border-radius: 26px; padding: 14px; box-shadow: var(--shadow-soft); }
 .hue { background: color-mix(in oklab, var(--hue) 15%, var(--surface)); color: color-mix(in oklab, var(--hue) 55%, var(--ink)); }
 .h-primary { --hue: var(--primary); } .h-warn { --hue: var(--warn); } .h-ok { --hue: var(--ok); } .h-bad { --hue: var(--bad); }
@@ -299,6 +306,14 @@ button { -webkit-tap-highlight-color: transparent; }
 .day-list .act, .day-list .empty { box-shadow: none; background: var(--surface-2); }
 .day-list .empty .blob { background: var(--surface); }
 .type-b .i { width: 24px; height: 24px; }
+/* Daftar kegiatan di halaman: HP/tablet menggantikan counter, kalender, dan Perlu update; PC di kolom kanan. */
+.listview { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.lv-head { display: flex; align-items: center; gap: 12px; }
+.lv-head h2 { font-family: var(--font-display); font-weight: 600; font-size: 21px; }
+.app.view-list #side { display: none; }
+@media (max-width: 1099px) { .app.view-list #stats, .app.view-list #cal { display: none; } }
+.day-actions .btn-soft { box-shadow: none; padding: 14px 8px; }
+.btn-soft.day-add { background: var(--primary); color: var(--on-primary); box-shadow: var(--shadow-pop); }
 .btn-soft.day-go { box-shadow: none; background: color-mix(in oklab, var(--primary) 12%, var(--surface)); color: color-mix(in oklab, var(--primary) 70%, var(--ink)); padding: 14px 8px; }
 .list-nav { display: flex; align-items: center; gap: 10px; background: var(--surface); border-radius: 22px; padding: 8px; box-shadow: var(--shadow-soft); }
 .list-month { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; line-height: 1.2; }
@@ -568,6 +583,13 @@ textarea.input { resize: vertical; min-height: 84px; line-height: 1.45; font-wei
   .list-btn { margin-left: auto; }
 
   .search-pop { left: auto; width: 460px; }
+
+  .stats { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+  .stat { padding: 12px 16px; border-radius: 22px; }
+  .stat:nth-child(4) { display: flex; }
+  .stat .ib { display: grid; }
+  .stat b { font-size: 26px; line-height: 1.05; }
+  .stat span.l { font-size: 12.5px; }
 
   .drawer {
     inset: 12px 12px 12px auto; width: 420px; max-width: calc(100% - 24px);

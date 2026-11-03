@@ -1,6 +1,6 @@
 const CONFIG = {
   APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbwN3F16Hr_igxyAX-m2cAhlHbYAc7gznVAld92SabzaVLv-A6X6z7sj30LcGl6iZaM4/exec',
-  APP_VERSION: '2.2',
+  APP_VERSION: '2.3',
 
   // Jenis kegiatan. `key` disimpan di kolom Kegiatan; colorVar merujuk ke token warna di css/style.css.
   // Isian: k1 = nama utama (judul kegiatan), k2 = isian kedua, lalu PIC & keterangan.
